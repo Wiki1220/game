@@ -1,0 +1,55 @@
+.piece {
+    width: 90%;
+    height: 90%;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'KaiTi', '楷体', serif;
+    /* Traditional Chinese font style */
+    font-weight: bold;
+    font-size: 1.8em;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(255, 255, 255, 0.2);
+    transition: transform 0.2s, box-shadow 0.2s;
+    user-select: none;
+    position: relative;
+    z-index: 10;
+}
+
+.piece:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.3);
+}
+
+.piece.selected {
+    outline: 3px solid var(--accent-primary);
+    outline-offset: 2px;
+    transform: scale(1.1);
+    box-shadow: 0 0 15px var(--accent-primary);
+    z-index: 20;
+}
+
+.piece-red {
+    background: radial-gradient(circle at 30% 30%, #ff8e8e, #d32f2f);
+    color: #590d0d;
+    border: 2px solid #b71c1c;
+}
+
+.piece-black {
+    background: radial-gradient(circle at 30% 30%, #666, #1a1a1a);
+    color: #ffcccc;
+    /* Light red/white for contrast on black? Or traditional black on wood? Standard is Red vs Black text on Wood. But for "Premium", pieces are often plastic/stone. Let's go with Stone look. */
+    color: #f0f0f0;
+    border: 2px solid #000;
+}
+
+.piece-inner {
+    border: 1px dashed rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    width: 80%;
+    height: 80%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}

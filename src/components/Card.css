@@ -1,0 +1,172 @@
+:root {
+    --card-width: 140px;
+    --card-height: 220px;
+}
+
+.game-card {
+    width: var(--card-width);
+    height: var(--card-height);
+    border-radius: 10px;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+    user-select: none;
+    font-family: 'Montserrat', 'Segoe UI', sans-serif;
+    /* Cleaner font */
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 4px;
+}
+
+.game-card:hover:not(.disabled) {
+    transform: translateY(-8px) scale(1.05);
+    z-index: 10;
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5);
+}
+
+.game-card.disabled {
+    opacity: 0.6;
+    filter: grayscale(0.8);
+    cursor: default;
+}
+
+/* Internal Frame */
+.card-border-frame {
+    width: 100%;
+    height: 100%;
+    background: #222;
+    border: 2px solid;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+/* RARITY THEMES */
+/* SILVER */
+.game-card.rarity-silver {
+    background: linear-gradient(135deg, #a0a0a0, #e0e0e0, #a0a0a0);
+}
+
+.game-card.rarity-silver .card-border-frame {
+    border-color: #c0c0c0;
+    background: radial-gradient(circle at center, #3a3a3a, #1b1b1b);
+}
+
+.game-card.rarity-silver .card-name {
+    color: #f0f0f0;
+}
+
+/* GOLD */
+.game-card.rarity-gold {
+    background: linear-gradient(135deg, #bf953f, #fcf6ba, #aa771c);
+}
+
+.game-card.rarity-gold .card-border-frame {
+    border-color: #ffd700;
+    background: radial-gradient(circle at center, #5e4b1f, #2e2608);
+}
+
+.game-card.rarity-gold .card-name {
+    color: #ffd700;
+}
+
+/* RED */
+.game-card.rarity-red {
+    background: linear-gradient(135deg, #8a0000, #ff4d4d, #8a0000);
+}
+
+.game-card.rarity-red .card-border-frame {
+    border-color: #ff4d4d;
+    background: radial-gradient(circle at center, #5c0000, #2b0000);
+}
+
+.game-card.rarity-red .card-name {
+    color: #ff6666;
+}
+
+/* CONTENT LAYOUT */
+.card-header {
+    margin-top: 15px;
+    width: 90%;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 8px;
+    min-height: 20px;
+}
+
+.card-name {
+    font-weight: 700;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.card-art {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+.icon-container {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.icon-container svg {
+    width: 32px;
+    height: 32px;
+}
+
+.icon-container.TRAP {
+    color: #ff4d4d;
+}
+
+.icon-container.SUMMON {
+    color: #4dffff;
+}
+
+.icon-container.BUFF {
+    color: #4dff4d;
+}
+
+.icon-container.TACTIC {
+    color: #e0e0e0;
+}
+
+.card-info {
+    width: 90%;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px;
+    border-radius: 4px;
+    margin-bottom: 25px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.card-info p {
+    margin: 0;
+    font-size: 0.7em;
+    color: #ccc;
+    line-height: 1.2;
+}
+
+.card-footer-badge {
+    position: absolute;
+    bottom: 5px;
+    font-size: 0.55em;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    opacity: 0.5;
+    color: #fff;
+}

@@ -1,0 +1,62 @@
+.settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.settings-modal {
+    background: var(--bg-secondary);
+    padding: 30px;
+    border-radius: 12px;
+    border: 1px solid var(--accent-primary);
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.settings-modal h3 {
+    margin: 0 0 10px 0;
+    text-align: center;
+    color: var(--text-primary);
+}
+
+.settings-btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.settings-btn:active {
+    transform: scale(0.98);
+}
+
+.settings-btn.surrender {
+    background-color: var(--bg-tertiary);
+    color: var(--accent-red);
+    border: 1px solid var(--accent-red);
+}
+
+.settings-btn.quit {
+    background-color: #333;
+    color: #aaa;
+}
+
+.settings-btn.close {
+    margin-top: 10px;
+    background-color: var(--accent-primary);
+    color: #000;
+}

@@ -1,0 +1,66 @@
+.draft-overlay {
+    position: absolute;
+    /* Changed from fixed to absolute to stay in board-section */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+    border-radius: 4px;
+    /* Optional if board has rounded corners */
+}
+
+.draft-modal {
+    background: var(--bg-secondary);
+    padding: 40px;
+    border-radius: 16px;
+    border: 1px solid var(--accent-primary);
+    box-shadow: 0 0 50px rgba(220, 179, 92, 0.2);
+    text-align: center;
+    animation: modalPop 0.3s ease-out;
+}
+
+@keyframes modalPop {
+    from {
+        transform: scale(0.8);
+        opacity: 0
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1
+    }
+}
+
+.draft-modal h2 {
+    margin-top: 0;
+    color: var(--accent-primary);
+    margin-bottom: 30px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.draft-options {
+    display: flex;
+    gap: 30px;
+    justify-content: center;
+}
+
+.draft-card-wrapper {
+    transition: transform 0.2s;
+}
+
+.draft-card-wrapper:hover {
+    transform: scale(1.1);
+}
+
+.draft-hint {
+    margin-top: 20px;
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}

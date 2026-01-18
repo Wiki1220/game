@@ -1,0 +1,22 @@
+.hand-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow-x: auto;
+    padding: 0 20px;
+}
+
+.hand-cards {
+    display: flex;
+    gap: 10px;
+    /* Overlap slightly for "Hand" feel? Maybe just gap for now */
+    padding: 10px;
+}
+
+.empty-hand {
+    color: var(--text-secondary);
+    font-style: italic;
+    opacity: 0.5;
+}

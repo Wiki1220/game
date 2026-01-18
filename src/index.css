@@ -1,0 +1,227 @@
+/* Main Layout Grid */
+.main-layout {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+/* Left Section: Board */
+.board-section {
+  flex: 1;
+  /* Takes up remaining space */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: radial-gradient(circle at center, #252529 0%, #121214 100%);
+  position: relative;
+}
+
+/* Right Section: Sidebar */
+.sidebar {
+  width: 320px;
+  /* Fixed width */
+  background: var(--bg-secondary);
+  border-left: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 20px;
+  box-shadow: -5px 0 20px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+}
+
+.sidebar-section {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 1. User Info */
+.user-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.user-details {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #555;
+  border: 2px solid transparent;
+}
+
+.avatar.red {
+  border-color: var(--accent-red);
+  background: #300;
+}
+
+.avatar.black {
+  border-color: #aaa;
+  background: #111;
+}
+
+.username {
+  font-weight: bold;
+  font-size: 1em;
+}
+
+.icon-btn.settings-trigger {
+  background: transparent;
+  font-size: 1.5em;
+  padding: 5px;
+  border: none;
+  opacity: 0.7;
+}
+
+.icon-btn.settings-trigger:hover {
+  opacity: 1;
+  transform: rotate(90deg);
+}
+
+/* 2. Timer */
+.timer-section {
+  background: var(--bg-tertiary);
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+  border: 1px solid #333;
+}
+
+.timer-label {
+  font-size: 0.7em;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+
+.timer-clock {
+  font-family: 'Courier New', monospace;
+  font-size: 2.5em;
+  font-weight: bold;
+  color: var(--accent-primary);
+  text-shadow: 0 0 10px rgba(220, 187, 64, 0.3);
+}
+
+.timer-clock.critical {
+  color: var(--accent-red);
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 3. Log (History) */
+.log-section {
+  /* Removed flex: 1 to reduce height as requested */
+  height: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 150px;
+  background: #111;
+  border-radius: 8px;
+  border: 1px solid #222;
+  overflow: hidden;
+}
+
+.log-section h4 {
+  margin: 0;
+  padding: 10px;
+  background: #1a1a1a;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border-bottom: 1px solid #333;
+}
+
+.log-entries {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  font-size: 0.85em;
+  font-family: monospace;
+}
+
+.log-entry {
+  margin-bottom: 6px;
+  line-height: 1.3;
+  color: #ccc;
+}
+
+.log-tag.red {
+  color: var(--accent-red);
+}
+
+.log-tag.black {
+  color: #888;
+}
+
+/* 4. Hand Area */
+.hand-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--bg-tertiary);
+  padding-top: 20px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.sidebar-hand-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  /* max-height: 400px; -- removed limit so it fills space */
+  overflow-y: auto;
+}
+
+/* Sidebar mini-card overrides specifically for sidebar display */
+.sidebar-card-item .game-card {
+  /* Scale down slightly for sidebar? Or keep full? */
+  --card-width: 100%;
+  /* Full width of sidebar container */
+  --card-height: 140px;
+  /* Reduced height */
+  font-size: 0.8em;
+}
+
+.sidebar-card-item .game-card .card-info {
+  display: none;
+  /* Hide full text in mini list? Or show? User asked: Name top, info bottom */
+  /* User request: "name upper middle, below info" */
+  /* Let's keep it visible but maybe smaller */
+  margin-bottom: 5px;
+  padding: 2px;
+  font-size: 0.9em;
+}
+
+.sidebar-card-item .game-card .card-art {
+  height: 30px;
+  /* Shrink art */
+  overflow: hidden;
+}
+
+/* Hand Area inside Board Section (Draft Modal use probably standard) */
+/* Actually, App.jsx puts DraftModal inside board-section. DraftModal uses Card component. */

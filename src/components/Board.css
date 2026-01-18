@@ -1,0 +1,169 @@
+/* Board Container */
+.board-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    background-color: transparent;
+    overflow: hidden;
+    position: relative;
+}
+
+.xiangqi-board {
+    aspect-ratio: 9 / 10;
+    height: 95%;
+    position: relative;
+    background-color: #E6C288;
+    /* Slightly lighter clearer wood */
+    border: 4px solid #5d4037;
+    box-shadow: 0 5px 30px rgba(0, 0, 0, 0.6);
+
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    grid-template-rows: repeat(10, 1fr);
+
+    /* Subtle texture */
+    background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjRTZDMjg4Ii8+CjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz4KPC9zdmc+');
+}
+
+/* --- GRID LINES --- */
+.board-grid-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.grid-line-horiz {
+    position: absolute;
+    left: 3%;
+    /* Slight margin from edge borders */
+    right: 3%;
+    height: 1px;
+    background-color: #5d4037;
+}
+
+.grid-line-vert {
+    position: absolute;
+    top: 3%;
+    bottom: 3%;
+    width: 1px;
+    background-color: #5d4037;
+}
+
+/* The vertical lines need to behave differently */
+/* We will control exact top/height in JSX to be safer */
+
+.palace-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.river-bank {
+    position: absolute;
+    top: 45%;
+    left: 5%;
+    right: 5%;
+    height: 10%;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    font-family: "KaiTi", "楷体", "STKaiti", serif;
+    font-size: 3.5vh;
+    color: #5d4037;
+    user-select: none;
+    z-index: 2;
+}
+
+/* --- PIECES --- */
+/* The interactive layer */
+.board-square {
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    position: relative;
+}
+
+.board-square.valid-target:hover::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: rgba(0, 255, 0, 0.4);
+    border-radius: 50%;
+}
+
+.piece {
+    width: 85%;
+    height: 85%;
+    border-radius: 50%;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.4), inset -2px -2px 5px rgba(0, 0, 0, 0.2), inset 2px 2px 5px rgba(255, 255, 255, 0.3);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none;
+    position: relative;
+    transition: transform 0.1s;
+    border: 2px solid;
+}
+
+/* Piece Generic Colors */
+.piece {
+    background: #f7e6c3;
+    /* Wood chip color */
+}
+
+/* Red Pieces */
+.piece.red {
+    color: #d00000;
+    border-color: #b00000;
+}
+
+/* Black Pieces */
+.piece.black {
+    color: #111;
+    border-color: #333;
+}
+
+.piece.selected {
+    transform: scale(1.15);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.8), 2px 2px 5px rgba(0, 0, 0, 0.4);
+    z-index: 20;
+    border-color: gold;
+}
+
+.piece-text {
+    font-family: "KaiTi", "楷体", serif;
+    font-weight: bold;
+    font-size: 2.8vh;
+    /* Scale with board height */
+    margin-top: -3px;
+    /* visual center adjustment */
+}
+
+/* If piece is on valid target (capture) */
+.board-square.valid-target .piece {
+    box-shadow: 0 0 0 4px rgba(255, 0, 0, 0.5);
+    /* Capture indicator */
+}
+
+.highlight-overlay {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: rgba(46, 204, 113, 0.8);
+    border-radius: 50%;
+    pointer-events: none;
+}
