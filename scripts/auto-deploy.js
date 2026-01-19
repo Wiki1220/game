@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import archiver from 'archiver'; // 使用 import 语法，因为 package.json 中 type: module
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -72,7 +73,7 @@ async function sshExec(command) {
 
 async function deploy() {
     log('\n===========================================', 'magenta');
-    log('    自动部署流程', 'magenta');
+    log('    自动部署流程 (v2 - Cross Platform)', 'magenta');
     log('===========================================\n', 'magenta');
 
     try {
@@ -85,21 +86,44 @@ async function deploy() {
         log('✓ 前端构建成功', 'green');
 
         // 步骤 2: 打包文件
-        step(2, '打包部署文件...');
+        step(2, '打包部署文件 (使用 archiver)...');
         const zipPath = path.join(projectRoot, 'deploy.zip');
-        if (fs.existsSync(zipPath)) {
-            fs.unlinkSync(zipPath);
-        }
 
-        const zipResult = await runCommand(
-            'powershell Compress-Archive -Path dist,server -DestinationPath deploy.zip -Force'
-        );
-        if (!zipResult.success) {
-            throw new Error('打包失败: ' + zipResult.error);
-        }
+        await new Promise((resolve, reject) => {
+            const output = fs.createWriteStream(zipPath);
+            const archive = archiver('zip', {
+                zlib: { level: 9 } // 最高压缩级别
+            });
 
-        const stats = fs.statSync(zipPath);
-        log(`✓ 打包完成 (${(stats.size / 1024 / 1024).toFixed(2)} MB)`, 'green');
+            output.on('close', () => {
+                log(`✓ 打包完成 (${(archive.pointer() / 1024 / 1024).toFixed(2)} MB)`, 'green');
+                resolve();
+            });
+
+            archive.on('warning', (err) => {
+                if (err.code === 'ENOENT') {
+                    log('Zip Warning: ' + err, 'yellow');
+                } else {
+                    reject(err);
+                }
+            });
+
+            archive.on('error', (err) => reject(err));
+
+            archive.pipe(output);
+
+            // 添加 dist 目录
+            archive.directory(path.join(projectRoot, 'dist'), 'dist');
+
+            // 添加 server 目录 (过滤掉 node_modules)
+            // 注意：archiver 的 glob 模式比较方便
+            archive.directory(path.join(projectRoot, 'server'), 'server', (entry) => {
+                // 简单过滤器：如果路径包含 node_modules 则排除
+                return entry.name.includes('node_modules') ? false : entry;
+            });
+
+            archive.finalize();
+        });
 
         // 步骤 3: 备份当前服务器状态
         step(3, '备份服务器当前状态...');
@@ -146,7 +170,7 @@ async function deploy() {
       rm -rf deploy-test
       mkdir deploy-test
       cd deploy-test
-      unzip -q /root/deploy.zip
+      unzip -q -o /root/deploy.zip
       rm -rf /var/www/game
       mv /tmp/deploy-test /var/www/game
       cd /var/www/game/server
@@ -160,7 +184,7 @@ async function deploy() {
 
         const deployResult = await sshExec(deployCmd);
         if (deployResult.code !== 0) {
-            throw new Error('部署失败: ' + deployResult.errorOutput);
+            throw new Error('部署失败:\n' + deployResult.errorOutput + '\n' + deployResult.output);
         }
         log('✓ 部署成功', 'green');
 
@@ -173,8 +197,9 @@ async function deploy() {
     `;
 
         const verifyResult = await sshExec(verifyCmd);
+        // 检查 output 是否包含 200 (因为 curl -w 返回的是状态码)
         if (verifyResult.code !== 0 || !verifyResult.output.includes('200')) {
-            throw new Error('服务验证失败');
+            throw new Error('服务验证失败 (未返回 HTTP 200)');
         }
         log('✓ 服务运行正常 (HTTP 200)', 'green');
 
@@ -186,6 +211,8 @@ async function deploy() {
       test -f ../dist/index.html || exit 1
       # 测试 Socket.IO 端点
       curl -s http://127.0.0.1:3333/socket.io/ | grep -q "0" || exit 1
+      # 测试数据库健康状态
+      curl -s http://127.0.0.1:3333/api/health | grep -q "connected" || exit 1
       echo "测试通过"
     `;
 
@@ -197,7 +224,9 @@ async function deploy() {
         }
 
         // 清理
-        fs.unlinkSync(zipPath);
+        if (fs.existsSync(zipPath)) {
+            fs.unlinkSync(zipPath);
+        }
 
         log('\n===========================================', 'green');
         log('    ✓✓✓ 部署成功！', 'green');
@@ -225,10 +254,12 @@ async function deploy() {
           PORT=3333 pm2 start index.js --name game
           pm2 save
           echo "回滚完成"
+        else 
+           echo "无备份可回滚"
         fi
       `;
             await sshExec(rollbackCmd);
-            log('✓ 已回滚到之前版本', 'yellow');
+            log('✓ 已回滚到备份版本', 'yellow');
         } catch (rollbackError) {
             log('✗ 回滚失败: ' + rollbackError.message, 'red');
         }

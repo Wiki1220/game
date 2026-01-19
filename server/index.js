@@ -7,8 +7,32 @@ const path = require('path');
 const app = express();
 app.use(cors());
 
-// Serve Static Files from Frontend Build (Bypassing Nginx)
-// In production: /var/www/game/server is CWD, so ../dist is /var/www/game/dist
+// Database
+const sequelize = require('./config/db');
+const User = require('./models/User');
+
+// Sync Database
+(async () => {
+    try {
+        await sequelize.authenticate();
+        console.log('✅ Database connected.');
+        await sequelize.sync(); // Create tables if not exists
+        console.log('✅ Models synced.');
+    } catch (error) {
+        console.error('❌ Database connection error:', error);
+    }
+})();
+
+// Health Check
+app.get('/api/health', async (req, res) => {
+    try {
+        await sequelize.authenticate();
+        res.json({ status: 'ok', db: 'connected' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', db: error.message });
+    }
+});
+
 // In local: d:\Projects\game is CWD (via node server/index.js), so dist is ./dist?
 // Let's handle both.
 // If __dirname is .../server, then ../dist is correct.
