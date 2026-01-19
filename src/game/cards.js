@@ -1,26 +1,50 @@
-import { CARD_DATA } from './cardDefs';
+import { CARD_DATA, CARD_TIERS } from './cardDefs.js';
 
-// Re-export for compatibility if needed elsewhere
-export { CARD_DATA };
+// Probabilities check
+// Silver 40%, Gold 40%, Mythic 20%
+const PROBABILITIES = [
+    { tier: CARD_TIERS.SILVER, weight: 40 },
+    { tier: CARD_TIERS.GOLD, weight: 40 },
+    { tier: CARD_TIERS.MYTHIC, weight: 20 }
+];
 
-export const getRandomCards = (count = 3) => {
+export const getRandomRarity = () => {
+    const random = Math.random() * 100;
+    let sum = 0;
+    for (const p of PROBABILITIES) {
+        sum += p.weight;
+        if (random < sum) return p.tier;
+    }
+    return CARD_TIERS.SILVER; // Fallback
+};
+
+export const getRandomCards = (count = 3, forceRarity = null) => {
+    // 1. Determine Rarity for this batch
+    const selectedRarity = forceRarity || getRandomRarity();
+
+    // 2. Filter Pool by Rarity AND Implementation
+    const pool = CARD_DATA.filter(c => c.isImplemented && c.tier === selectedRarity);
+
+    // If pool is empty (e.g. no Mythic cards implemented), fallback to lower tiers
+    // For now, let's assume we have enough or allow duplication if needed, 
+    // but better to fallback than crash.
+    let validPool = pool;
+    if (validPool.length === 0) {
+        // Fallback to ANY implemented
+        validPool = CARD_DATA.filter(c => c.isImplemented);
+    }
+
+    // 3. Pick Cards
     const selection = [];
-    // Filter only implemented cards for now to avoid crashes? 
-    // User wants to add cards via file, so perhaps we show them even if not implemented?
-    // "是否已经实现" flag matches. Let's filter by isImplemented === true for the draft to avoid bugs.
-    // Or users might want to see them as placeholders. 
-    // I'll filter for now to be safe, or maybe just all.
-    // Let's stick to ALL, but maybe the UI disables them?
-    // User logic: "I can edit this file... you execute logic".
-
-    // For random draft, stick to implemented ones for gameplay stability unless debug.
-    const pool = CARD_DATA.filter(c => c.isImplemented);
-
     for (let i = 0; i < count; i++) {
-        if (pool.length === 0) break;
-        const randomCard = pool[Math.floor(Math.random() * pool.length)];
+        if (validPool.length === 0) break;
+        const randomCard = validPool[Math.floor(Math.random() * validPool.length)];
         // Add Unique ID for this instance
         selection.push({ ...randomCard, uid: Math.random().toString(36).substr(2, 9) });
     }
-    return selection;
+
+    return {
+        cards: selection,
+        rarity: selectedRarity
+    };
 };
