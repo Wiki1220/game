@@ -6,6 +6,10 @@ const path = require('path');
 
 const app = express();
 app.use(cors());
+app.use(express.json()); // Support JSON body
+
+// Routes
+app.use('/api/auth', require('./routes/authRoutes'));
 
 // Database
 const sequelize = require('./config/db');

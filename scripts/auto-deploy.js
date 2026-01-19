@@ -213,6 +213,8 @@ async function deploy() {
       curl -s http://127.0.0.1:3333/socket.io/ | grep -q "0" || exit 1
       # 测试数据库健康状态
       curl -s http://127.0.0.1:3333/api/health | grep -q "connected" || exit 1
+      # 测试 Auth API (游客登录)
+      curl -s -X POST http://127.0.0.1:3333/api/auth/guest -H "Content-Type: application/json" | grep -q "token" || exit 1
       echo "测试通过"
     `;
 
