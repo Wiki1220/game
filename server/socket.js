@@ -114,6 +114,7 @@ module.exports = (io) => {
                 room.status = 'PLAYING';
                 io.to(roomId).emit('game_start', {
                     roomId: room.id,
+                    seed: Date.now(),
                     players: Array.from(room.players.values()).map(p => ({
                         id: p.user.id, username: p.user.username, color: p.color
                     }))

@@ -31,8 +31,8 @@ const formatLog = (entry) => {
     return `${action} ${info || ''}`;
 };
 
-function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit }) {
-    const [gameState, dispatch] = useReducer(gameReducer, null, createInitialState);
+function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
+    const [gameState, dispatch] = useReducer(gameReducer, { seed }, createInitialState);
     const [showSettings, setShowSettings] = useState(false);
     const [myColor, setMyColor] = useState(myInitialColor || PLAYERS.RED);
     const [roomId, setRoomId] = useState(initialRoomId);
@@ -122,36 +122,43 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit }) {
 
     const handleSquareClick = (x, y) => {
         if (gameState.phase === 'GAMEOVER') return;
-
-        // Online Turn Check
         if (gameMode === 'ONLINE_GAME' && gameState.turn !== myColor) return;
 
-        const { board, turn, validMoves } = gameState;
+        const { board, turn, validMoves, pendingCard } = gameState;
 
-        // A. Targeting
-        if (gameState.phase === PHASES.TARGET_SELECTION || gameState.phase === 'TARGET_SELECTION') {
-            const targetPiece = board.find(p => p.x === x && p.y === y);
-            if (targetPiece) handleGameAction({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: targetPiece.id } });
-            else handleGameAction({ type: ActionTypes.CANCEL_CARD });
+        // 1. Pending Card Targeting
+        if (pendingCard) {
+            const clickedPiece = board.find(p => p.x === x && p.y === y);
+            // Empty Target (e.g. Summon)
+            if (!clickedPiece && pendingCard.targetEmpty) {
+                handleGameAction({ type: ActionTypes.SELECT_PIECE, payload: { x, y } });
+                return;
+            }
+            // Piece Target (Self/Enemy/Type checks will be done by Engine resolve)
+            // But we can filter basic clicks here.
+            if (clickedPiece) {
+                handleGameAction({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: clickedPiece.id, x, y } });
+                return;
+            }
+            // Invalid click -> Cancel Card
+            handleGameAction({ type: ActionTypes.CANCEL_CARD });
             return;
         }
 
-        // B. Move Or Select
+        // 2. Move Logic
         const isMoveTarget = validMoves.some(m => m.x === x && m.y === y);
         if (isMoveTarget) {
-            handleGameAction({ type: ActionTypes.MOVE_PIECE, payload: { x, y } });
+            handleGameAction({
+                type: ActionTypes.MOVE_PIECE,
+                payload: { pieceId: gameState.selectedPieceId, toX: x, toY: y }
+            });
             return;
         }
 
+        // 3. Select Piece (Friendly)
         const clickedPiece = board.find(p => p.x === x && p.y === y);
         if (clickedPiece && clickedPiece.player === turn) {
-            const moves = getPieceMoves(clickedPiece, board, gameState.activeBuffs, gameState.globalRule ? [gameState.globalRule] : []); // Pass Global Rule? Logic needs updates in pieces.js if rules affect moves
-            // For 'RULE_TRAMPLE' etc.
             dispatch({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: clickedPiece.id } });
-            dispatch({ type: 'UPDATE_VALID_MOVES', payload: moves });
-            // Sync selection mainly for visual (optional)
-        } else if (gameState.pendingCard) {
-            handleGameAction({ type: ActionTypes.CANCEL_CARD });
         }
     };
 

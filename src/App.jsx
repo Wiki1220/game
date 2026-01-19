@@ -16,6 +16,7 @@ function App() {
   // Game Context (for online game)
   const [activeRoomId, setActiveRoomId] = useState(null);
   const [myColor, setMyColor] = useState('red');
+  const [seed, setSeed] = useState(null);
 
   // Load user from local storage
   useEffect(() => {
@@ -48,6 +49,7 @@ function App() {
       // Find my color
       const myData = data.players.find(p => p.id === user.id);
       setMyColor(myData ? myData.color : 'red');
+      if (data.seed) setSeed(data.seed);
 
       setGameState('GAME_ONLINE');
     };
@@ -156,7 +158,8 @@ function App() {
         gameMode="ONLINE_GAME"
         initialRoomId={activeRoomId}
         myInitialColor={myColor}
-        onQuit={handleQuitGame}
+        seed={seed}
+        onQuit={() => setGameState('LOBBY')}
       />
     );
   }
