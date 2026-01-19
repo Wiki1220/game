@@ -1,24 +1,80 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+
+# Deployment artifacts
+*.zip
+*.tar.gz
+*.tgz
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+pm2-*.log
 
-node_modules
-dist
-dist-ssr
-*.local
+# Database
+*.sql
+*.sqlite
+*.db
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# Testing
+coverage/
+.nyc_output/
+
+# Debug scripts (for reference, actual files deleted)
+scripts/debug_*.js
+scripts/test_*.js
+scripts/check_*.js
+scripts/diagnose_*.js
+scripts/deploy_*.js
+!scripts/step_by_step_deploy.js
+!scripts/quick_check.js
+
+# Temporary deployment files
+deploy_*.zip
+game-deploy.zip
+
+# Documentation drafts
+*.draft.md
+DEPLOYMENT_ISSUES.md
+ACCESS_GUIDE.md
+
+# Server-specific
+.pm2/
+ecosystem.config.js
+
+# Security
+*.pem
+*.key
+*.cert
