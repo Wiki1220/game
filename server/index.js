@@ -55,59 +55,9 @@ const io = new Server(server, {
     }
 });
 
-// State
-let waitingPlayer = null; // Simple queue
-const rooms = new Map(); // roomId -> { red: socketId, black: socketId, log: [] }
 
-io.on('connection', (socket) => {
-    console.log(`User Connected: ${socket.id}`);
-
-    // Matchmaking Logic
-    socket.on('find_match', () => {
-        if (waitingPlayer && waitingPlayer.id !== socket.id) {
-            // Match found!
-            const roomId = `room_${Date.now()}`;
-            const opponent = waitingPlayer;
-            waitingPlayer = null;
-
-            // Assign sides
-            const roomConfig = {
-                id: roomId,
-                red: opponent.id,
-                black: socket.id,
-                log: []
-            };
-            rooms.set(roomId, roomConfig);
-
-            // Notify Players
-            socket.join(roomId);
-            opponent.join(roomId);
-
-            io.to(opponent.id).emit('game_start', { roomId, color: 'red', opponentId: socket.id });
-            socket.emit('game_start', { roomId, color: 'black', opponentId: opponent.id });
-
-            console.log(`Match created: ${roomId}`);
-        } else {
-            // Wait
-            waitingPlayer = socket;
-            socket.emit('waiting_for_match');
-            console.log(`User ${socket.id} waiting...`);
-        }
-    });
-
-    // Relay Actions
-    socket.on('game_action', (data) => {
-        // Broadcast to room excluding sender
-        socket.to(data.roomId).emit('remote_action', data.action);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('User Disconnected', socket.id);
-        if (waitingPlayer === socket) {
-            waitingPlayer = null;
-        }
-    });
-});
+// Initialize Socket Logic
+require('./socket')(io);
 
 // SPA Fallback: ALL other requests return index.html
 app.get('*', (req, res) => {

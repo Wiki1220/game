@@ -2,13 +2,20 @@ import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import Lobby from './components/Lobby';
 import GameArena from './components/GameArena';
+import WaitingRoom from './components/WaitingRoom';
 import { socket } from './game/socket';
 import './index.css';
 
 function App() {
   const [user, setUser] = useState(null);
-  const [gameState, setGameState] = useState('LOGIN'); // LOGIN, LOBBY, GAME_LOCAL, GAME_ONLINE
-  const [roomId, setRoomId] = useState(null);
+  const [gameState, setGameState] = useState('LOGIN'); // LOGIN, LOBBY, WAITING_ROOM, GAME_LOCAL, GAME_ONLINE
+
+  // Room State
+  const [roomInfo, setRoomInfo] = useState(null);
+
+  // Game Context (for online game)
+  const [activeRoomId, setActiveRoomId] = useState(null);
+  const [myColor, setMyColor] = useState('red');
 
   // Load user from local storage
   useEffect(() => {
@@ -20,6 +27,47 @@ function App() {
     }
   }, []);
 
+  // Socket Event Listeners for Global Room Navigation
+  useEffect(() => {
+    if (!socket) return;
+
+    // 1. Room Joined -> Go to Waiting Room
+    const handleRoomJoined = (info) => {
+      // info: { roomId, isOwner, players: [...] }
+      console.log('Room Joined:', info);
+      setRoomInfo(info);
+      setActiveRoomId(info.roomId);
+      setGameState('WAITING_ROOM');
+    };
+
+    // 2. Game Start -> Go to Game Arena
+    const handleGameStart = (data) => {
+      // data: { roomId, players: [{id, username, color}] }
+      console.log('Game Starting:', data);
+
+      // Find my color
+      const myData = data.players.find(p => p.id === user.id);
+      setMyColor(myData ? myData.color : 'red');
+
+      setGameState('GAME_ONLINE');
+    };
+
+    // 3. Error
+    const handleError = (msg) => {
+      alert(msg); // Simple alert for now
+    };
+
+    socket.on('room_joined', handleRoomJoined);
+    socket.on('game_start', handleGameStart);
+    socket.on('error', handleError);
+
+    return () => {
+      socket.off('room_joined', handleRoomJoined);
+      socket.off('game_start', handleGameStart);
+      socket.off('error', handleError);
+    };
+  }, [user]); // user dependency ensures we have user id for color check
+
   const handleLogin = (userData) => {
     setUser(userData);
     setGameState('LOBBY');
@@ -30,71 +78,64 @@ function App() {
     localStorage.removeItem('user');
     setUser(null);
     setGameState('LOGIN');
-    socket.disconnect();
+    if (socket.connected) socket.disconnect();
   };
 
   const handleStartLocalGame = () => {
     setGameState('GAME_LOCAL');
+    setMyColor('red'); // P1 is Red
+    setActiveRoomId(null);
   };
 
-  const handleJoinOnlineGame = (targetRoomId, type) => {
-    // 1. Connect Socket with Token
+  // Called from Lobby
+  const handleRoomAction = ({ action, roomId, config }) => {
+    // 1. Connect Socket
     const token = localStorage.getItem('token');
     socket.auth = { token };
-    socket.connect();
+    if (!socket.connected) socket.connect();
 
-    // 2. Set State
-    setRoomId(targetRoomId);
-    setGameState('GAME_ONLINE');
-
-    // 3. Emit Join (Logic will be refined in Stage 5: Room Mechanism)
-    // For now, we reuse the old flow logic inside GameArena, 
-    // BUT actually GameArena expects socket events.
-    // We should emit 'join_room' or similar here?
-    // Old logic: socket.emit('find_match');
-
-    // Let's rely on GameArena to handle socket events via 'gameMode'.
-    // But we need to emit initial join.
-    console.log(`Joining room: ${targetRoomId}`);
-
-    // Temporary: Emit find_match compatible for old server logic
-    // Or just connect. The old server logic puts you in a room if you match.
-    // Stage 5 implements proper rooms. 
-    // For now, let's stick to the OLD matching logic if we click "Online Game",
-    // BUT the user interface has changed.
-
-    // Since we are in Stage 3, we haven't implemented backend Room Manager yet (Stage 5).
-    // So the "Create Room" buttons are a bit premature for the backend logic.
-    // HOWEVER, to keep it working, we can use the old 'find_match' logic.
-
-    if (type === 'JOIN' || type === 'CREATE') {
-      // Fallback to old matching for now until Stage 5
-      socket.emit('find_match');
+    // 2. Emit Action
+    if (action === 'CREATE') {
+      socket.emit('create_room', config);
+    } else if (action === 'JOIN') {
+      socket.emit('join_room', roomId);
     }
+  };
+
+  const handleLeaveRoom = () => {
+    if (activeRoomId) {
+      socket.emit('leave_room');
+    }
+    setActiveRoomId(null);
+    setRoomInfo(null);
+    setGameState('LOBBY');
   };
 
   const handleQuitGame = () => {
-    // Return to Lobby
-    // If online, disconnect socket or leave room
-    if (gameState === 'GAME_ONLINE') {
-      socket.disconnect(); // Simple way to leave
+    // If online, leave room
+    if (gameState === 'GAME_ONLINE' && activeRoomId) {
+      socket.emit('leave_room');
+      // Disconnect socket for clean slate? 
+      // Or keep connected for lobby?
+      // Keep connected usually.
     }
     setGameState('LOBBY');
-    setRoomId(null);
+    setActiveRoomId(null);
+    setRoomInfo(null);
   };
 
-  // Render Router
+  // --- RENDER ---
+
   if (gameState === 'LOGIN') {
     return <Login onLogin={handleLogin} onGuest={handleLogin} />;
   }
 
-  if (gameState === 'LOBBY') {
+  if (gameState === 'WAITING_ROOM') {
     return (
-      <Lobby
-        user={user}
-        onLogout={handleLogout}
-        onLocalGame={handleStartLocalGame}
-        onJoinGame={handleJoinOnlineGame}
+      <WaitingRoom
+        roomInfo={roomInfo}
+        onLeave={handleLeaveRoom}
+        userId={user ? user.id : null}
       />
     );
   }
@@ -103,6 +144,7 @@ function App() {
     return (
       <GameArena
         gameMode="LOCAL"
+        myInitialColor="red"
         onQuit={handleQuitGame}
       />
     );
@@ -112,14 +154,22 @@ function App() {
     return (
       <GameArena
         gameMode="ONLINE_GAME"
-        initialRoomId={roomId}
-        myInitialColor="red" // This will be updated by socket 'game_start' in GameArena
+        initialRoomId={activeRoomId}
+        myInitialColor={myColor}
         onQuit={handleQuitGame}
       />
     );
   }
 
-  return <div>Loading...</div>;
+  // DEFAULT: LOBBY
+  return (
+    <Lobby
+      user={user}
+      onLogout={handleLogout}
+      onJoinGame={handleRoomAction} // Pass the handler
+      onLocalGame={handleStartLocalGame}
+    />
+  );
 }
 
 export default App;
