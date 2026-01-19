@@ -45,6 +45,9 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
     // Hand Stacking State
     const [hoveredCardIndex, setHoveredCardIndex] = useState(null);
 
+    // Opponent Card Preview
+    const [opponentCardPreview, setOpponentCardPreview] = useState(null); // { card, isTrap }
+
     // --- Effects ---
 
     // Timer
@@ -64,7 +67,7 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
         return () => socket.off('remote_action');
     }, [gameMode]);
 
-    // Log Monitoring for Notifications & Game Over
+    // Log Monitoring for Notifications & Game Over & Opponent Card Preview
     useEffect(() => {
         const lastEntry = gameState.log[gameState.log.length - 1];
         if (lastEntry) {
@@ -74,12 +77,30 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                 return; // Don't show play notification if game over
             }
 
-            // Card Play Notification (Opponent)
-            if (lastEntry.action === 'PLAY' && lastEntry.player !== myColor) {
-                showNotification(`对手使用了卡牌`, lastEntry.info);
+            // Card Play Notification & Preview (Opponent)
+            if (lastEntry.text && lastEntry.text.includes('使用')) {
+                const isOpponent = (lastEntry.turn && lastEntry.turn !== myColor) ||
+                    (gameMode === 'LOCAL' && lastEntry.turn !== gameState.turn);
+
+                if (isOpponent) {
+                    // Extract card name from log text like "红方 使用 路障"
+                    const match = lastEntry.text.match(/使用\s+(.+)/);
+                    if (match) {
+                        const cardName = match[1];
+                        // Check if it's a trap card (陷阱)
+                        const isTrap = cardName.includes('陷阱') || lastEntry.text.includes('陷阱');
+
+                        setOpponentCardPreview({
+                            card: { name: isTrap ? '???' : cardName, effect: isTrap ? '对手发动了陷阱卡' : '' },
+                            isTrap
+                        });
+
+                        setTimeout(() => setOpponentCardPreview(null), 2000);
+                    }
+                }
             }
         }
-    }, [gameState.log, myColor]);
+    }, [gameState.log, myColor, gameMode, gameState.turn]);
 
     // Game Over Phase Check
     useEffect(() => {
@@ -116,9 +137,7 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
 
     const handlePlayCard = (card) => {
         handleGameAction({ type: ActionTypes.PLAY_CARD, payload: { card } });
-    }; // Animation handled by CSS removal
-
-    const endPlayPhase = () => handleGameAction({ type: ActionTypes.END_PLAY_PHASE });
+    };
 
     const handleSquareClick = (x, y) => {
         if (gameState.phase === 'GAMEOVER') return;
@@ -135,7 +154,6 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                 return;
             }
             // Piece Target (Self/Enemy/Type checks will be done by Engine resolve)
-            // But we can filter basic clicks here.
             if (clickedPiece) {
                 handleGameAction({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: clickedPiece.id, x, y } });
                 return;
@@ -161,6 +179,40 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
             dispatch({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: clickedPiece.id } });
         }
     };
+
+    // Helper: Get selectable targets for pending card
+    const getSelectableTargets = () => {
+        if (!gameState.pendingCard) return { pieces: [], positions: [] };
+
+        const card = gameState.pendingCard;
+        const pieces = [];
+        const positions = [];
+
+        if (card.targetEmpty) {
+            // Find all empty positions
+            for (let x = 0; x < 9; x++) {
+                for (let y = 0; y < 10; y++) {
+                    const hasPiece = gameState.board.find(p => p.x === x && p.y === y);
+                    if (!hasPiece) {
+                        positions.push({ x, y });
+                    }
+                }
+            }
+        }
+
+        if (card.targetSelf || card.targetEnemy || card.targetType) {
+            gameState.board.forEach(p => {
+                if (card.targetSelf && p.player !== gameState.turn) return;
+                if (card.targetEnemy && p.player === gameState.turn) return;
+                if (card.targetType && p.type !== card.targetType) return;
+                pieces.push(p.id);
+            });
+        }
+
+        return { pieces, positions };
+    };
+
+    const selectableTargets = getSelectableTargets();
 
     const activePlayerHand = gameState.players[gameState.turn].hand;
 
@@ -189,6 +241,25 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                 </div>
             )}
 
+            {/* Opponent Card Preview (Top Right) */}
+            {opponentCardPreview && (
+                <div className="opponent-card-preview-overlay">
+                    <div className="opponent-card-box">
+                        <div className="opponent-card-title">
+                            {opponentCardPreview.isTrap ? '陷阱卡' : '对手使用卡牌'}
+                        </div>
+                        <div className="opponent-card-name">
+                            {opponentCardPreview.card.name}
+                        </div>
+                        {!opponentCardPreview.isTrap && opponentCardPreview.card.effect && (
+                            <div className="opponent-card-effect">
+                                {opponentCardPreview.card.effect}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {showSettings && (
                 <SettingsModal onClose={() => setShowSettings(false)} onSurrender={() => { onQuit(); setShowSettings(false); }} onQuit={onQuit} />
             )}
@@ -214,6 +285,9 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                         lastOpponentMove={gameState.lastOpponentMove}
                         traps={gameState.traps}
                         activeBuffs={gameState.activeBuffs}
+                        selectableTargets={selectableTargets.pieces}
+                        selectableEmptyPositions={selectableTargets.positions}
+                        summonedPieces={gameState.summonedPieces}
                     />
                 </div>
 
@@ -229,13 +303,44 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                         <button className="icon-btn settings-trigger" onClick={() => setShowSettings(true)}>⚙️</button>
                     </div>
 
-                    {/* Global Rule Display (If any) */}
-                    {gameState.globalRule && (
-                        <div className="global-rule-display">
-                            <small>当前规则</small>
-                            <div>{gameState.globalRule.name}</div>
+                    {/* Global Rules Display - Only RULE type cards */}
+                    {gameState.globalRules && gameState.globalRules.length > 0 && (() => {
+                        const ruleCards = gameState.globalRules.filter(r => r.type === '永续'); // CARD_TYPES.RULE = '永续'
+                        if (ruleCards.length === 0) return null;
+
+                        return (
+                            <div className="sidebar-section active-rules-section">
+                                <div className="section-header">
+                                    <span>⚠️ 生效规则</span>
+                                </div>
+                                <div className="rules-list">
+                                    {ruleCards.map((rule, idx) => (
+                                        <div key={idx} className="rule-item">
+                                            <div className="rule-name">{rule.name}</div>
+                                            <div className="rule-effect-text">{rule.effect}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* Action Log */}
+                    <div className="sidebar-section action-log-section">
+                        <div className="section-header">
+                            <span>📜 行动历史</span>
                         </div>
-                    )}
+                        <div className="log-list">
+                            {gameState.log.slice(-8).reverse().map((entry, idx) => (
+                                <div key={idx} className="log-entry">
+                                    <span className="log-text">{entry.text}</span>
+                                </div>
+                            ))}
+                            {gameState.log.length === 0 && (
+                                <div className="empty-log">暂无行动</div>
+                            )}
+                        </div>
+                    </div>
 
                     <div className="sidebar-section hand-section">
                         <div className="section-header">
@@ -302,12 +407,6 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                             })}
                             {activePlayerHand.length === 0 && <div className="empty-state">空手牌</div>}
                         </div>
-
-                        {gameState.phase === PHASES.PLAY_CARD && (
-                            <button className="primary-action full-width" onClick={endPlayPhase} disabled={gameMode !== 'LOCAL' && gameState.turn !== myColor} style={{ marginTop: 300 }}>
-                                结束出牌
-                            </button>
-                        )}
                     </div>
                 </aside>
             </div>
@@ -326,6 +425,56 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
             z-index: 200;
         }
         .card-preview-text { font-size: 1.2em; color: #ffd700; margin-top: 5px; }
+        
+        .opponent-card-preview-overlay {
+            position: fixed;
+            top: 20px;
+            right: 420px; /* Next to board, covering hand area */
+            z-index: 250;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .opponent-card-box {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 3px solid #ffd700;
+            border-radius: 15px;
+            padding: 20px;
+            min-width: 250px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        
+        .opponent-card-title {
+            font-size: 0.9em;
+            color: #95a5a6;
+            text-align: center;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .opponent-card-name {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #ffd700;
+            text-align: center;
+            margin-bottom: 15px;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+        
+        .opponent-card-effect {
+            font-size: 0.9em;
+            color: #ecf0f1;
+            text-align: center;
+            line-height: 1.4;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
 
         .hand-stack-container {
             position: relative;
@@ -349,6 +498,86 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
             margin: 10px;
             border-left: 3px solid #e74c3c;
             color: #fff;
+        }
+
+        .active-rules-section {
+            margin: 10px;
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px solid #e74c3c;
+            border-radius: 5px;
+            padding: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .rules-list {
+            margin-top: 8px;
+        }
+
+        .rule-item {
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(0,0,0,0.3);
+            border-radius: 3px;
+            font-size: 0.85em;
+        }
+
+        .rule-name {
+            font-weight: bold;
+            color: #e74c3c;
+            margin-bottom: 4px;
+        }
+        
+        .rule-effect-text {
+            font-size: 0.9em;
+            color: #bdc3c7;
+            line-height: 1.3;
+        }
+
+        .rule-icon {
+            margin-right: 8px;
+            font-size: 1.2em;
+        }
+
+        .action-log-section {
+            margin: 10px;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid #34495e;
+            border-radius: 5px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .log-list {
+            margin-top: 8px;
+        }
+
+        .log-entry {
+            padding: 4px 6px;
+            margin: 2px 0;
+            background: rgba(255,255,255,0.05);
+            border-left: 2px solid #3498db;
+            border-radius: 2px;
+            font-size: 0.8em;
+            color: #ecf0f1;
+        }
+
+        .empty-log {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 0.85em;
+        }
+
+        .section-header {
+            font-weight: bold;
+            color: #ecf0f1;
+            font-size: 0.9em;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
 
         .victory-modal {

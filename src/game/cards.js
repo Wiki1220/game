@@ -34,16 +34,22 @@ export const getRandomCards = (count = 3, forceRarity = null, rng = null) => {
     let pool = CARD_DATA.filter(c => c.isImplemented && c.tier === selectedRarity);
     if (pool.length === 0) pool = CARD_DATA.filter(c => c.isImplemented);
 
-    // 3. Pick Cards
+    // 3. Pick Cards (NO DUPLICATES)
     const selection = [];
-    for (let i = 0; i < count; i++) {
-        if (pool.length === 0) break;
-        const randIndex = Math.floor(random() * pool.length);
-        const randomCard = pool[randIndex];
-        // UID
-        selection.push({ ...randomCard, uid: Math.random().toString(36).substr(2, 9) }); // UID can be non-deterministic or seeded? Seeded is better for strict sync.
-        // But UID doesn't affect logic much, just React keys. 
-        // Let's stick with Math.random for UID to avoid complex string gen from float.
+    const availablePool = [...pool]; // Copy to avoid mutation
+
+    for (let i = 0; i < count && availablePool.length > 0; i++) {
+        const randIndex = Math.floor(random() * availablePool.length);
+        const randomCard = availablePool[randIndex];
+
+        // Add card with unique ID
+        selection.push({
+            ...randomCard,
+            uid: `${randomCard.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        });
+
+        // Remove selected card from pool to prevent duplicates
+        availablePool.splice(randIndex, 1);
     }
 
     return {

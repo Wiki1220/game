@@ -153,7 +153,7 @@ export const CARD_DATA = [
         type: CARD_TYPES.ACTION,
         effect: '随机发动五张通常卡，目标会随机选定。',
         effectId: 'ACTION_WHISPER',
-        isImplemented: true
+        isImplemented: false // Removed - too complex
     },
     {
         id: 'action_undead',

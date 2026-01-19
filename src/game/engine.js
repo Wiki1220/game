@@ -54,6 +54,7 @@ export const createInitialState = ({ seed } = {}) => ({
     // Draft
     draftOptions: [],
     nextDraftRarity: null,
+    rarityOwner: null, // Track who chose the current rarity ('red' or 'black')
     // Mechanics
     activeBuffs: [],
     traps: [],
@@ -68,6 +69,15 @@ export const createInitialState = ({ seed } = {}) => ({
 });
 
 const getPieceAt = (board, x, y) => board.find(p => p.x === x && p.y === y);
+
+const getPieceName = (piece) => {
+    const names = {
+        red: { general: '帅', advisor: '仕', elephant: '相', horse: '马', chariot: '车', cannon: '炮', soldier: '兵', roadblock: '路障', jackpot: '大奖', arsenal: '武器库' },
+        black: { general: '将', advisor: '士', elephant: '象', horse: '马', chariot: '车', cannon: '炮', soldier: '卒', roadblock: '路障', jackpot: '大奖', arsenal: '武器库' },
+        neutral: { roadblock: '路障', jackpot: '大奖', arsenal: '武器库' }
+    };
+    return names[piece.player]?.[piece.type] || piece.type;
+};
 
 // --- Move Logic ---
 const isValidPos = (x, y) => x >= 0 && x < 9 && y >= 0 && y < 10;
@@ -253,18 +263,55 @@ const resolveCardEffect = (state, card, targetId = null, targetPos = null) => {
 
     // Switch for Effects (33 Cards)
     switch (card.effectId) {
-        case 'SUMMON_ROADBLOCK': if (targetPos) spawnPiece('roadblock', 'neutral', targetPos.x, targetPos.y); break;
+        case 'SUMMON_ROADBLOCK':
+            if (!targetPos) {
+                console.error('SUMMON_ROADBLOCK requires targetPos');
+                newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 召唤路障失败 (未选择位置)` });
+                break;
+            }
+            spawnPiece('roadblock', 'neutral', targetPos.x, targetPos.y);
+            newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 召唤了路障` });
+            break;
+
         case 'SUMMON_JACKPOT':
             {
-                let empty = []; for (let x = 0; x < 9; x++) for (let y = 0; y < 10; y++) if (!getPieceAt(newState.board, x, y)) empty.push({ x, y });
-                if (empty.length) { const p = empty[Math.floor(Math.random() * empty.length)]; spawnPiece('jackpot', 'neutral', p.x, p.y); }
+                let empty = [];
+                for (let x = 0; x < 9; x++) {
+                    for (let y = 0; y < 10; y++) {
+                        if (!getPieceAt(newState.board, x, y)) empty.push({ x, y });
+                    }
+                }
+                if (empty.length) {
+                    const p = empty[Math.floor(Math.random() * empty.length)];
+                    spawnPiece('jackpot', 'neutral', p.x, p.y);
+                    newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 召唤了大奖` });
+                }
             }
             break;
-        case 'SUMMON_FRIENDLY': if (targetPos) spawnPiece('soldier', player, targetPos.x, targetPos.y, { immobile: true }); break;
+
+        case 'SUMMON_FRIENDLY':
+            if (!targetPos) {
+                console.error('SUMMON_FRIENDLY requires targetPos');
+                newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 召唤增援失败 (未选择位置)` });
+                break;
+            }
+            spawnPiece('soldier', player, targetPos.x, targetPos.y, { immobile: true });
+            newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 召唤了增援` });
+            break;
+
         case 'SUMMON_ARSENAL':
             {
-                let empty = []; for (let x = 0; x < 9; x++) for (let y = 0; y < 10; y++) if (!getPieceAt(newState.board, x, y)) empty.push({ x, y });
-                if (empty.length) { const p = empty[Math.floor(Math.random() * empty.length)]; spawnPiece('arsenal', 'neutral', p.x, p.y); }
+                let empty = [];
+                for (let x = 0; x < 9; x++) {
+                    for (let y = 0; y < 10; y++) {
+                        if (!getPieceAt(newState.board, x, y)) empty.push({ x, y });
+                    }
+                }
+                if (empty.length) {
+                    const p = empty[Math.floor(Math.random() * empty.length)];
+                    spawnPiece('arsenal', 'neutral', p.x, p.y);
+                    newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 召唤了武器库` });
+                }
             }
             break;
         case 'EQUIP_DRESS':
@@ -282,9 +329,14 @@ const resolveCardEffect = (state, card, targetId = null, targetPos = null) => {
             break;
         case 'ACTION_UNIVERSE':
             {
+                // Check condition: no duplicate piece types
                 const myP = newState.board.filter(p => p.player === player);
                 if (new Set(myP.map(p => p.type)).size === myP.length) {
-                    newState.board = newState.board.filter(p => p.player === player || p.player === 'neutral');
+                    // Eliminate all ENEMY pieces (not own pieces!)
+                    const enemyPieces = newState.board.filter(p => p.player === opponent);
+                    enemyPieces.forEach(p => newState.players[opponent].dead.push(p));
+                    newState.board = newState.board.filter(p => p.player !== opponent);
+                    newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 宇宙消灭所有敌方棋子!` });
                 }
             }
             break;
@@ -296,31 +348,104 @@ const resolveCardEffect = (state, card, targetId = null, targetPos = null) => {
             }
             break;
         case 'ACTION_UNDEAD':
-            // Revive all dead soldiers
-            newState.players[player].dead.filter(p => p.type === 'soldier').forEach(p => {
-                // Try find empty spot near original?
-                // Simple: Find first empty spot
-                // ...
-            });
+            {
+                // Check if all soldiers are dead
+                const mySoldiers = newState.board.filter(p => p.player === player && p.type === 'soldier');
+                const deadSoldiers = newState.players[player].dead.filter(p => p.type === 'soldier');
+
+                if (mySoldiers.length === 0 && deadSoldiers.length > 0) {
+                    // Revive all dead soldiers at random empty positions
+                    deadSoldiers.forEach(soldier => {
+                        let empty = [];
+                        for (let x = 0; x < 9; x++) {
+                            for (let y = 0; y < 10; y++) {
+                                if (!getPieceAt(newState.board, x, y)) empty.push({ x, y });
+                            }
+                        }
+                        if (empty.length > 0) {
+                            const pos = empty[Math.floor(Math.random() * empty.length)];
+                            soldier.x = pos.x;
+                            soldier.y = pos.y;
+                            newState.board.push(soldier);
+                        }
+                    });
+                    // Clear dead soldiers
+                    newState.players[player].dead = newState.players[player].dead.filter(p => p.type !== 'soldier');
+                    newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 复活了所有兵!` });
+                }
+            }
             break;
         case 'ACTION_FIREBALL':
+            // Check condition: my pieces < opponent pieces
             if (newState.board.filter(p => p.player === player).length < newState.board.filter(p => p.player === opponent).length && targetPiece) {
-                newState.board = newState.board.filter(p => p.id !== targetPiece.id);
+                // Cannot kill general with fireball
+                if (targetPiece.type === 'general') {
+                    newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 火球术无法消灭将帅` });
+                } else {
+                    newState.board = newState.board.filter(p => p.id !== targetPiece.id);
+                    newState.players[targetPiece.player].dead.push(targetPiece);
+                }
             }
             break;
         case 'ACTION_NANO':
             if (targetPiece) {
-                // Random Move 2 steps.
-                // Simplified: Just move x/y randomly +/- 2
+                // Random Move 2 steps
+                const moves = getValidMoves(newState, targetPiece);
+                if (moves.length > 0) {
+                    // First random move
+                    const move1 = moves[Math.floor(Math.random() * moves.length)];
+                    targetPiece.x = move1.x;
+                    targetPiece.y = move1.y;
+
+                    // Second random move from new position
+                    const moves2 = getValidMoves(newState, targetPiece);
+                    if (moves2.length > 0) {
+                        const move2 = moves2[Math.floor(Math.random() * moves2.length)];
+                        targetPiece.x = move2.x;
+                        targetPiece.y = move2.y;
+                    }
+                    newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 纳米激素使 ${getPieceName(targetPiece)} 随机移动` });
+                }
             }
             break;
         case 'ACTION_FLOOD': newState.riverFloodTimer = 12; break;
         case 'ACTION_TIME_DISTORT': newState.globalRules.push({ id: 'TIME_DISTORT', duration: 2 }); break;
         case 'ACTION_ESCORT':
+            // Check if in check (应将)
+            const general = newState.board.find(p => p.player === player && p.type === 'general');
+            const isInCheck = general && newState.board.some(p => {
+                if (p.player === opponent) {
+                    const moves = getValidMoves(newState, p);
+                    return moves.some(m => m.x === general.x && m.y === general.y);
+                }
+                return false;
+            });
+
+            if (!isInCheck) {
+                // Not in check, discard card
+                newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 弃置护驾 (未应将)` });
+                break;
+            }
+
             if (targetPos) {
                 const friends = newState.board.filter(p => p.player === player);
                 const f = friends[Math.floor(Math.random() * friends.length)];
-                if (f) { f.x = targetPos.x; f.y = targetPos.y; }
+                if (f) {
+                    f.x = targetPos.x;
+                    f.y = targetPos.y;
+                    newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 护驾传送 ${getPieceName(f)}` });
+                }
+            }
+            break;
+        case 'ACTION_SUS_TRADE':
+            // Record the piece type used this turn, will check opponent's next turn
+            if (newState.lastMovedPieceType) {
+                newState.activeBuffs.push({
+                    effectId: 'SUS_TRADE_WATCH',
+                    player,
+                    watchType: newState.lastMovedPieceType,
+                    duration: 2
+                });
             }
             break;
         case 'ACTION_IMMOBILIZE': if (targetPiece) newState.activeBuffs.push({ pieceId: targetPiece.id, effectId: 'FROZEN', duration: 2 }); break;
@@ -334,20 +459,71 @@ const resolveCardEffect = (state, card, targetId = null, targetPos = null) => {
                 }
             }
             break;
-        case 'ACTION_IGNITION': if (targetPiece && targetPiece.type === 'chariot') {
-            const dy = player === 'red' ? -1 : 1;
-            if (!getPieceAt(newState.board, targetPiece.x, targetPiece.y + dy)) targetPiece.y += dy;
-        } break;
+        case 'ACTION_IGNITION':
+            if (targetPiece && targetPiece.type === 'chariot') {
+                // Check if at birth position
+                const birthY = player === 'red' ? 9 : 0;
+                if (targetPiece.y === birthY) {
+                    const dy = player === 'red' ? -1 : 1;
+                    if (!getPieceAt(newState.board, targetPiece.x, targetPiece.y + dy)) {
+                        targetPiece.y += dy;
+                        newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 点火使车前进` });
+                    }
+                }
+            }
+            break;
         case 'RULE_PURSUIT':
         case 'RULE_UNLIMITED':
         case 'RULE_RESTRICT':
         case 'RULE_BURN':
         case 'RULE_EQUILIBRIUM':
         case 'RULE_TIDE':
-            newState.globalRules.push({ id: card.effectId, duration: 999 });
+            // Add complete card info to globalRules for proper display
+            newState.globalRules.push({
+                id: card.effectId,
+                name: card.name,
+                effect: card.effect,
+                type: card.type,
+                duration: 999
+            });
             break;
-        case 'TRAP_OVERLOAD': newState.globalRules.push({ id: 'TRAP_OVERLOAD', owner: player, count: 0 }); break;
-        case 'SPEED_SHRUG': newState.activeBuffs.push({ effectId: 'SPEED_SHRUG', player, duration: 1 }); break;
+        case 'TRAP_OVERLOAD':
+            newState.globalRules.push({
+                id: 'TRAP_OVERLOAD',
+                name: '过载',
+                type: '陷阱',
+                owner: player,
+                count: 0
+            });
+            break;
+        case 'SPEED_SHRUG':
+            newState.activeBuffs.push({ effectId: 'SPEED_SHRUG', player, duration: 1 });
+            break;
+        case 'SPEED_COLUMN':
+            // Check if in check
+            const gen = newState.board.find(p => p.player === player && p.type === 'general');
+            const inCheck = gen && newState.board.some(p => {
+                if (p.player === opponent) {
+                    const movs = getValidMoves(newState, p);
+                    return movs.some(m => m.x === gen.x && m.y === gen.y);
+                }
+                return false;
+            });
+
+            if (inCheck && gen) {
+                // Can only move general, but can move twice
+                newState.activeBuffs.push({
+                    effectId: 'SPEED_COLUMN',
+                    player,
+                    allowedPiece: gen.id,
+                    movesLeft: 2,
+                    duration: 1
+                });
+                newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 绕柱 - 将可移动2步` });
+            } else {
+                newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 弃置绕柱 (未应将)` });
+            }
+            break;
     }
 
     newState.players[player].hand = newState.players[player].hand.filter(c => c.uid !== card.uid);
@@ -452,16 +628,98 @@ export const gameReducer = (state, action) => {
 
                     // Check if platform is a summoned piece
                     if (platformPiece && newState.summonedPieces.includes(platformPiece.id)) {
-                        // Cannon suicide: remove the cannon that just moved
-                        newState.board = newState.board.filter(p => p.id !== piece.id);
-                        newState.players[piece.player].dead.push(piece);
-                        newState.log.push({ turn: state.turn, text: `${piece.player === 'red' ? '红方' : '黑方'}的炮使用召唤物作为炮架，同归于尽` });
-                        // Note: piece is already moved to toX, toY, but we're removing it before turn switch
+                        // Check if player has SPEED_SHRUG active
+                        const hasShrug = newState.activeBuffs.some(b => b.effectId === 'SPEED_SHRUG' && b.player === state.turn);
+
+                        if (!hasShrug) {
+                            // Cannon suicide: remove the cannon that just moved
+                            newState.board = newState.board.filter(p => p.id !== piece.id);
+                            newState.players[piece.player].dead.push(piece);
+                            newState.log.push({ turn: state.turn, text: `${piece.player === 'red' ? '红方' : '黑方'}的炮使用召唤物作为炮架，同归于尽` });
+                        } else {
+                            newState.log.push({ turn: state.turn, text: `${piece.player === 'red' ? '红方' : '黑方'}的炮耸肩无视召唤物炮架` });
+                        }
                     }
                 }
             }
 
             piece.x = toX; piece.y = toY;
+
+            // Equipment Triggers AFTER move
+
+            // EQUIP_DRESS: Soldier reaches end line -> becomes chariot + get prismatic card
+            if (piece.type === 'soldier') {
+                const hasDress = newState.activeBuffs.some(b => b.pieceId === piece.id && b.effectId === 'EQUIP_DRESS');
+                const endLine = piece.player === 'red' ? 0 : 9;
+                if (hasDress && piece.y === endLine) {
+                    piece.type = 'chariot';
+                    // Remove dress buff
+                    newState.activeBuffs = newState.activeBuffs.filter(b => !(b.pieceId === piece.id && b.effectId === 'EQUIP_DRESS'));
+                    // Give prismatic card
+                    if (newState.players[piece.player].hand.length < 3) {
+                        const { cards } = getRandomCards(1, CARD_TIERS.PRISMATIC, newState.rng);
+                        newState.players[piece.player].hand.push(...cards);
+                    }
+                    newState.log.push({ text: `${piece.player === 'red' ? '红方' : '黑方'}的兵变为车!` });
+                }
+            }
+
+            // EQUIP_SUICIDE: Chariot captures -> explodes and destroys surrounding pieces
+            if (target && piece.type === 'chariot') {
+                const hasSuicide = newState.activeBuffs.some(b => b.pieceId === piece.id && b.effectId === 'EQUIP_SUICIDE');
+                if (hasSuicide) {
+                    // Remove suicide chariot
+                    newState.board = newState.board.filter(p => p.id !== piece.id);
+                    newState.players[piece.player].dead.push(piece);
+
+                    // Destroy surrounding pieces (8 directions)
+                    const surroundingPieces = [];
+                    for (let dx = -1; dx <= 1; dx++) {
+                        for (let dy = -1; dy <= 1; dy++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const sp = getPieceAt(newState.board, toX + dx, toY + dy);
+                            if (sp) surroundingPieces.push(sp);
+                        }
+                    }
+                    surroundingPieces.forEach(sp => {
+                        newState.board = newState.board.filter(p => p.id !== sp.id);
+                        newState.players[sp.player].dead.push(sp);
+                    });
+                    newState.log.push({ text: `${piece.player === 'red' ? '红方' : '黑方'}的自爆车炸毁周围棋子!` });
+                }
+            }
+
+            // EQUIP_MEDAL: If piece in palace is captured, advisor sacrifices to revive it
+            if (target) {
+                // Check if any advisor has MEDAL and target is in palace
+                const inPalace = (x, y) => {
+                    if (y >= 0 && y <= 2) return x >= 3 && x <= 5; // Black palace
+                    if (y >= 7 && y <= 9) return x >= 3 && x <= 5; // Red palace
+                    return false;
+                };
+
+                if (inPalace(toX, toY)) {
+                    const advisors = newState.board.filter(p =>
+                        p.player === target.player &&
+                        p.type === 'advisor' &&
+                        newState.activeBuffs.some(b => b.pieceId === p.id && b.effectId === 'EQUIP_MEDAL')
+                    );
+
+                    if (advisors.length > 0) {
+                        const advisor = advisors[0];
+                        // Sacrifice advisor
+                        newState.board = newState.board.filter(p => p.id !== advisor.id);
+                        newState.players[advisor.player].dead.push(advisor);
+                        // Revive target at advisor's position
+                        target.x = advisor.x;
+                        target.y = advisor.y;
+                        newState.board.push(target);
+                        // Remove from dead if it was added
+                        newState.players[target.player].dead = newState.players[target.player].dead.filter(p => p.id !== target.id);
+                        newState.log.push({ text: `${advisor.player === 'red' ? '红方' : '黑方'}的士牺牲复活 ${getPieceName(target)}!` });
+                    }
+                }
+            }
 
             // Track last opponent move (for UI highlighting)
             newState.lastOpponentMove = {
@@ -481,10 +739,30 @@ export const gameReducer = (state, action) => {
                 newState.phase = 'PLAY_CARD';
             } else {
                 newState.phase = 'DRAFT';
-                // Generate Options using PROPER RNG (Deterministic)
-                const { cards, rarity } = getRandomCards(3, newState.nextDraftRarity, newState.rng);
+
+                // Tier Rotation Logic for Fairness
+                // 先手第一回合无卡牌,后手先随机一个颜色,然后先手相同,下一回合后手又会随机一个颜色,先手相同
+                let draftRarity;
+
+                if (!newState.rarityOwner) {
+                    // First draft ever - this is the "后手" (second player)
+                    draftRarity = null; // Random
+                } else if (newState.rarityOwner === nextTurn) {
+                    // Same player as last rarity owner = choose new random rarity
+                    draftRarity = null; // Random
+                } else {
+                    // Opposite player = use same rarity as opponent
+                    draftRarity = newState.nextDraftRarity;
+                }
+
+                const { cards, rarity } = getRandomCards(3, draftRarity, newState.rng);
                 newState.draftOptions = cards;
-                newState.nextDraftRarity = rarity; // Sync rarity to next player
+                newState.nextDraftRarity = rarity;
+
+                // Update rarity owner if we just chose a new random rarity
+                if (draftRarity === null) {
+                    newState.rarityOwner = nextTurn;
+                }
             }
 
             newState.selectedPieceId = null;

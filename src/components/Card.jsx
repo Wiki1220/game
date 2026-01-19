@@ -16,14 +16,14 @@ const TIER_STYLES = {
   }
 };
 
-// Card type icon mapping
+// Card type icon mapping (monochrome symbols)
 const TYPE_ICONS = {
-  [CARD_TYPES.SPEED]: '⚡',      // Lightning for speed
-  [CARD_TYPES.SUMMON]: '🎭',    // Mask for summon
-  [CARD_TYPES.EQUIP]: '⚔️',     // Sword for equipment
-  [CARD_TYPES.ACTION]: '🎯',    // Target for action
-  [CARD_TYPES.RULE]: '📜',      // Scroll for rules
-  [CARD_TYPES.TRAP]: '🕷️',      // Spider for trap
+  [CARD_TYPES.SPEED]: '⚔',      // Crossed swords for speed/attack
+  [CARD_TYPES.SUMMON]: '◆',    // Diamond for summon
+  [CARD_TYPES.EQUIP]: '⚙',     // Gear for equipment
+  [CARD_TYPES.ACTION]: '★',    // Star for action
+  [CARD_TYPES.RULE]: '∞',      // Infinity for permanent rules
+  [CARD_TYPES.TRAP]: '▼',      // Down triangle for trap
 };
 
 const Card = ({ card, onClick, disabled, style }) => {
@@ -56,11 +56,11 @@ const Card = ({ card, onClick, disabled, style }) => {
 
       <style>{`
         .game-card {
-          width: 120px;
-          height: 160px;
+          width: 150px;
+          height: 200px;
           border: 2px solid;
           border-radius: 10px;
-          padding: 10px;
+          padding: 12px;
           color: white;
           cursor: pointer;
           position: relative;
@@ -136,12 +136,13 @@ const Card = ({ card, onClick, disabled, style }) => {
         }
 
         .card-type-icon {
-          font-size: 3.5em;
+          font-size: 4em;
           filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+          color: #fff;
         }
 
         .card-footer {
-          padding: 8px 4px;
+          padding: 10px 6px;
           background: rgba(0,0,0,0.4);
           border-radius: 5px;
           z-index: 2;
@@ -150,16 +151,21 @@ const Card = ({ card, onClick, disabled, style }) => {
 
         .card-effect {
           margin: 0;
-          font-size: 0.65em;
-          line-height: 1.3;
+          font-size: 0.7em;
+          line-height: 1.4;
           text-align: center;
-          max-height: 40px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          display: -webkit-box;
-          -webkit-line-clamp: 3;
-          -webkit-box-orient: vertical;
+          max-height: 50px;
+          overflow-y: auto;
           text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        }
+        
+        .card-effect::-webkit-scrollbar {
+          width: 3px;
+        }
+        
+        .card-effect::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.3);
+          border-radius: 3px;
         }
 
         .card-shine {

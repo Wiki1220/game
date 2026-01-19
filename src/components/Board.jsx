@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import './Board.css';
 
-const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMove, lastOpponentMove, traps, activeBuffs }) => {
+const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMove, lastOpponentMove, traps, activeBuffs, selectableTargets = [], selectableEmptyPositions = [], summonedPieces = [] }) => {
     // Local state for hover tooltip
     const [hoveredPieceId, setHoveredPieceId] = useState(null);
 
@@ -49,34 +49,45 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
         if (!piece) return null;
         let msgs = [];
 
-        // 1. Check Traps (Attachments)
+        // 1. Summoned piece info
+        if (summonedPieces && summonedPieces.includes(piece.id)) {
+            const summonTypes = {
+                'roadblock': '召唤物: 路障 (可被双方吃掉)',
+                'jackpot': '召唤物: 大奖 (吃掉后手牌变彩色)',
+                'soldier': '召唤物: 增援 (不可移动)',
+                'arsenal': '召唤物: 武器库 (吃掉获得装备)'
+            };
+            const summonInfo = summonTypes[piece.type] || '召唤物';
+            msgs.push(summonInfo);
+        }
+
+        // 2. Equipment (activeBuffs for this piece)
+        if (activeBuffs) {
+            const equipments = activeBuffs.filter(buff => buff.pieceId === piece.id);
+            equipments.forEach(eq => {
+                msgs.push(`装备: ${eq.name}`);
+            });
+        }
+
+        // 3. Traps attached to this piece
         if (traps) {
             traps.forEach(trap => {
                 if (trap.targetId === piece.id) {
-                    // Map trap type to text. 
-                    // To do this robustly, we might want map or pass full card name in trap object?
-                    // Engine 'traps' array stores { type: effectId, targetId }.
-                    // We can map effectId to text.
-                    if (trap.type === 'TRAP_DOOMED') msgs.push("状态：被注定 (移动即弃牌)");
+                    const trapName = trap.name || '未知陷阱';
+                    if (trap.type === 'TRAP_DOOMED') {
+                        msgs.push("状态：被注定 (移动即弃牌)");
+                    } else {
+                        msgs.push(`陷阱: ${trapName}`);
+                    }
                 }
             });
         }
 
-        // 2. Global Buffs (if specific to piece type)
-        // e.g. IGNORE_HORSE_LEG for Horse
-        if (activeBuffs && activeBuffs.includes('IGNORE_HORSE_LEG') && piece.type === 'horse') {
-            // Check player? Engine activeBuffs applies to TURN player usually.
-            // If I view enemy horse, does it have buff?
-            // Usually activeBuffs cleared on turn switch. So only current turn player has them.
-            // But visual feedback is good.
-            // Assuming activeBuffs is just strings.
-            if (piece.player === 'red' || piece.player === 'black') {
-                // Actually activeBuffs in engine usually means "Current Turn Player's buffs".
-                // We don't check piece player here easily without knowing whose turn it is from props.
-                // But typically buffs are "My Horse".
-                msgs.push("状态：无视马脚");
-            }
-        }
+        // 4. Temporary piece properties
+        if (piece.barrier) msgs.push("状态：屏障保护");
+        if (piece.immobilized) msgs.push("状态：被定身");
+        if (piece.immobile) msgs.push("状态：不可移动");
+        if (piece.canCrossRiver) msgs.push("状态：可过河");
 
         if (msgs.length === 0) return null;
 
@@ -103,6 +114,9 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                 const isOpponentFrom = lastOpponentMove && lastOpponentMove.from && lastOpponentMove.from.x === x && lastOpponentMove.from.y === y;
                 const isOpponentTo = lastOpponentMove && lastOpponentMove.to && lastOpponentMove.to.x === x && lastOpponentMove.to.y === y;
 
+                // Selectable for card target
+                const isSelectableEmpty = selectableEmptyPositions.some(pos => pos.x === x && pos.y === y);
+
                 cells.push(
                     <div
                         key={`${x}-${y}`}
@@ -118,7 +132,7 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                         {isOpponentTo && <div className="opponent-move-marker to" />}
 
                         {piece && (
-                            <div className={`piece ${piece.player} ${piece.type} ${isSelected ? 'selected' : ''}`}>
+                            <div className={`piece ${piece.player} ${piece.type} ${isSelected ? 'selected' : ''} ${selectableTargets.includes(piece.id) ? 'selectable-target' : ''} ${summonedPieces.includes(piece.id) ? 'summoned-piece' : ''}`}>
                                 <span className="piece-text">
                                     {getPieceChar(piece.type, piece.player)}
                                 </span>
@@ -129,6 +143,7 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
 
                         {isValidMove && !piece && <div className="highlight-overlay target" />}
                         {isValidMove && piece && <div className="highlight-overlay capture" />}
+                        {isSelectableEmpty && <div className="highlight-overlay target" />}
                     </div>
                 );
             }
@@ -185,6 +200,20 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                     white-space: nowrap;
                     z-index: 100;
                     pointer-events: none;
+                }
+                
+                .selectable-target {
+                    animation: pulse-scale 1s ease-in-out infinite;
+                }
+                
+                @keyframes pulse-scale {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.15); }
+                }
+                
+                .summoned-piece {
+                    border-bottom: 3px solid #ffd700;
+                    box-shadow: 0 2px 0 0 rgba(255, 215, 0, 0.5);
                 }
             `}</style>
         </div>
