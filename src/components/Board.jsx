@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import './Board.css';
 
-const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMove, traps, activeBuffs }) => {
+const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMove, lastOpponentMove, traps, activeBuffs }) => {
     // Local state for hover tooltip
     const [hoveredPieceId, setHoveredPieceId] = useState(null);
 
@@ -99,6 +99,10 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                 const isLastSrc = lastMove && lastMove.fromX === x && lastMove.fromY === y;
                 const isLastDst = lastMove && lastMove.toX === x && lastMove.toY === y;
 
+                // Opponent Move Highlight (golden)
+                const isOpponentFrom = lastOpponentMove && lastOpponentMove.from && lastOpponentMove.from.x === x && lastOpponentMove.from.y === y;
+                const isOpponentTo = lastOpponentMove && lastOpponentMove.to && lastOpponentMove.to.x === x && lastOpponentMove.to.y === y;
+
                 cells.push(
                     <div
                         key={`${x}-${y}`}
@@ -110,6 +114,8 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                         {/* Markers */}
                         {isLastSrc && <div className="last-move-marker src" />}
                         {isLastDst && <div className="last-move-marker dst" />}
+                        {isOpponentFrom && <div className="opponent-move-marker from" />}
+                        {isOpponentTo && <div className="opponent-move-marker to" />}
 
                         {piece && (
                             <div className={`piece ${piece.player} ${piece.type} ${isSelected ? 'selected' : ''}`}>
@@ -150,6 +156,21 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                 .last-move-marker.dst {
                     background-color: rgba(255, 255, 0, 0.3);
                     box-shadow: 0 0 10px rgba(255, 215, 0, 0.6);
+                }
+                .opponent-move-marker {
+                    position: absolute;
+                    width: 100%; height: 100%;
+                    pointer-events: none;
+                    z-index: 2;
+                }
+                .opponent-move-marker.from {
+                    box-shadow: 0 0 15px 3px rgba(255, 215, 0, 0.6);
+                    border: 2px solid rgba(255, 215, 0, 0.8);
+                }
+                .opponent-move-marker.to {
+                    box-shadow: 0 0 15px 3px rgba(255, 215, 0, 0.7);
+                    border: 2px solid rgba(255, 215, 0, 0.9);
+                    background-color: rgba(255, 215, 0, 0.2);
                 }
                 .piece-tooltip {
                     position: absolute;

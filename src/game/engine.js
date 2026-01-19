@@ -60,9 +60,11 @@ export const createInitialState = ({ seed } = {}) => ({
     globalRules: [],
     // Logic
     lastMove: null,
+    lastOpponentMove: null, // { from: {x, y}, to: {x, y} }
     pendingCard: null,
     banishedPieces: [], // { piece, returnTurn }
     riverFloodTimer: 0,
+    summonedPieces: [], // [pieceId1, pieceId2, ...] - Track summoned pieces for FIFO and cannon platform check
 });
 
 const getPieceAt = (board, x, y) => board.find(p => p.x === x && p.y === y);
@@ -233,6 +235,17 @@ const resolveCardEffect = (state, card, targetId = null, targetPos = null) => {
     const spawnPiece = (type, owner, x, y, extra = {}) => {
         const id = Math.max(0, ...newState.board.map(p => p.id), 999) + 1; // Basic counter
         newState.board.push({ id, type, player: owner, x, y, ...extra });
+
+        // Track summoned pieces for FIFO limit (max 2)
+        newState.summonedPieces.push(id);
+
+        // Enforce summon limit: max 2 summoned pieces
+        if (newState.summonedPieces.length > 2) {
+            const oldestId = newState.summonedPieces.shift(); // Remove oldest from tracking
+            newState.board = newState.board.filter(p => p.id !== oldestId); // Remove from board
+            newState.log.push({ turn: player, text: `召唤物上限，移除最早的召唤物` });
+        }
+
         return id;
     };
 
@@ -394,6 +407,9 @@ export const gameReducer = (state, action) => {
 
             let newState = { ...state };
 
+            // Store move position for tracking (BEFORE piece moves)
+            const moveFrom = { x: piece.x, y: piece.y };
+
             // LOGIC: Capture & Triggers (Jackpot, etc.)
             const target = newState.board.find(p => p.x === toX && p.y === toY);
             if (target) {
@@ -402,12 +418,56 @@ export const gameReducer = (state, action) => {
 
                 // Triggers
                 if (target.type === 'jackpot') {
-                    const count = newState.players[state.turn].hand.length;
-                    newState.players[state.turn].hand = getRandomCards(count, CARD_TIERS.PRISMATIC);
+                    const currentHandSize = newState.players[state.turn].hand.length;
+                    // Hand limit check: only add cards if hand has space
+                    if (currentHandSize < 3) {
+                        const cardsToGet = Math.min(currentHandSize, 3 - currentHandSize); // Get as many as possible
+                        const { cards } = getRandomCards(cardsToGet, CARD_TIERS.PRISMATIC, newState.rng);
+                        newState.players[state.turn].hand.push(...cards);
+                    }
+                    // If hand is full (3), silently discard (no message per requirement)
+                }
+
+                // Cannon Platform Suicide: If cannon captures using summoned piece as platform, cannon dies too
+                if (piece.type === 'cannon' && target.player !== piece.player) {
+                    // Find the platform piece (between cannon's original position and target)
+                    const fromX = piece.x, fromY = piece.y;
+
+                    // Determine direction
+                    const dx = toX === fromX ? 0 : (toX > fromX ? 1 : -1);
+                    const dy = toY === fromY ? 0 : (toY > fromY ? 1 : -1);
+
+                    // Search for platform piece
+                    let platformPiece = null;
+                    let checkX = fromX + dx, checkY = fromY + dy;
+                    while (checkX !== toX || checkY !== toY) {
+                        const potentialPlatform = getPieceAt(newState.board, checkX, checkY);
+                        if (potentialPlatform) {
+                            platformPiece = potentialPlatform;
+                            break;
+                        }
+                        checkX += dx;
+                        checkY += dy;
+                    }
+
+                    // Check if platform is a summoned piece
+                    if (platformPiece && newState.summonedPieces.includes(platformPiece.id)) {
+                        // Cannon suicide: remove the cannon that just moved
+                        newState.board = newState.board.filter(p => p.id !== piece.id);
+                        newState.players[piece.player].dead.push(piece);
+                        newState.log.push({ turn: state.turn, text: `${piece.player === 'red' ? '红方' : '黑方'}的炮使用召唤物作为炮架，同归于尽` });
+                        // Note: piece is already moved to toX, toY, but we're removing it before turn switch
+                    }
                 }
             }
 
             piece.x = toX; piece.y = toY;
+
+            // Track last opponent move (for UI highlighting)
+            newState.lastOpponentMove = {
+                from: moveFrom,
+                to: { x: toX, y: toY }
+            };
 
             // Switch Turn
             const nextTurn = state.turn === PLAYERS.RED ? PLAYERS.BLACK : PLAYERS.RED;
@@ -439,6 +499,36 @@ export const gameReducer = (state, action) => {
             }
 
             return newState;
+        }
+
+        case ActionTypes.DRAFT_CARD: {
+            const { card } = action.payload;
+            if (state.phase !== 'DRAFT') return state;
+
+            const hand = state.players[state.turn].hand;
+            // Hand limit check: max 3 cards
+            if (hand.length >= 3) {
+                // Silently reject if hand is full (shouldn't happen due to skip logic, but safety check)
+                return { ...state, phase: 'PLAY_CARD', draftOptions: [] };
+            }
+
+            // Add card to hand
+            const newState = { ...state };
+            newState.players[state.turn].hand = [...hand, card];
+            newState.phase = 'PLAY_CARD';
+            newState.draftOptions = [];
+            newState.log.push({ turn: state.turn, text: `${state.turn === 'red' ? '红方' : '黑方'} 选择了 ${card.name}` });
+
+            return newState;
+        }
+
+        case ActionTypes.CANCEL_CARD: {
+            return { ...state, pendingCard: null, selectedPieceId: null, validMoves: [] };
+        }
+
+        case ActionTypes.END_PLAY_PHASE: {
+            // For now, just a placeholder - could add logic to enforce move phase
+            return state;
         }
 
         default: return state;

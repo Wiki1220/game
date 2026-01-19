@@ -211,6 +211,7 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                         validMoves={gameState.validMoves}
                         onSquareClick={handleSquareClick}
                         lastMove={gameState.lastMove}
+                        lastOpponentMove={gameState.lastOpponentMove}
                         traps={gameState.traps}
                         activeBuffs={gameState.activeBuffs}
                     />
