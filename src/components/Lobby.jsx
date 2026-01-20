@@ -6,40 +6,45 @@ const Lobby = ({ user, onLogout, onJoinGame, onLocalGame }) => {
   const [inputRoom, setInputRoom] = useState('');
   const [rooms, setRooms] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isMatching, setIsMatching] = useState(false);
 
   useEffect(() => {
-    // BUG-006 FIX: 确保 socket 连接后再请求房间列表
+    // 监听房间列表
     const handleRoomList = (list) => {
+      console.log('[Lobby] Received room_list:', list.length, 'rooms');
       setRooms(list);
     };
 
     const requestRooms = () => {
-      socket.emit('get_rooms');
+      console.log('[Lobby] Requesting rooms, socket connected:', socket.connected);
+      if (socket.connected) {
+        socket.emit('get_rooms');
+      }
     };
 
-    // 如果已连接，直接请求；否则等待连接后再请求
-    if (socket.connected) {
-      requestRooms();
-    } else {
-      socket.once('connect', requestRooms);
-    }
+    // 请求房间列表
+    requestRooms();
 
+    // 连接时也请求一次
+    socket.on('connect', requestRooms);
     socket.on('room_list', handleRoomList);
+
+    // 监听匹配状态
+    const handleMatchingWait = () => setIsMatching(true);
+    const handleMatchingCanceled = () => setIsMatching(false);
+
+    socket.on('matching_wait', handleMatchingWait);
+    socket.on('matching_canceled', handleMatchingCanceled);
 
     return () => {
       socket.off('room_list', handleRoomList);
       socket.off('connect', requestRooms);
+      socket.off('matching_wait', handleMatchingWait);
+      socket.off('matching_canceled', handleMatchingCanceled);
     };
   }, []);
 
   const handleCreateSubmit = (config) => {
-    // onJoinGame handles socket emit? 
-    // Better: Lobby emits 'create_room', then App handles 'room_joined'.
-    // BUT App currently manages the "GameState" transition (LOGIN -> LOBBY -> GAME).
-    // If Lobby emits, App needs to know when to switch view.
-    // App listens to 'room_joined' or 'game_start'.
-    // So Lobby can just emit socket events directly?
-    // Let's delegate to App via onJoinGame for cleaner "View Control".
     onJoinGame({ action: 'CREATE', config });
     setShowCreateModal(false);
   };
@@ -47,6 +52,16 @@ const Lobby = ({ user, onLogout, onJoinGame, onLocalGame }) => {
   const handleJoin = (roomId) => {
     if (!roomId) return;
     onJoinGame({ action: 'JOIN', roomId });
+  };
+
+  const handleMatchStart = () => {
+    socket.emit('match_player');
+    setIsMatching(true);
+  };
+
+  const handleMatchCancel = () => {
+    socket.emit('cancel_match');
+    setIsMatching(false);
   };
 
   return (
@@ -90,6 +105,21 @@ const Lobby = ({ user, onLogout, onJoinGame, onLocalGame }) => {
               <button onClick={() => handleJoin(inputRoom)} className="action-btn" disabled={!inputRoom}>加入私有房间</button>
             </div>
             <button onClick={() => setShowCreateModal(true)} className="action-btn primary large room-create-btn">创建房间</button>
+          </div>
+
+          {/* Matchmaking Section */}
+          <div className="mode-card match-section">
+            <h3>⚔️ 快速匹配</h3>
+            <p>寻找实力相当的对手 (先到先得)</p>
+            {isMatching ? (
+              <div className="matching-status">
+                <div className="spinner"></div>
+                <p>正在寻找对手...</p>
+                <button onClick={handleMatchCancel} className="action-btn secondary cancel-match-btn">取消匹配</button>
+              </div>
+            ) : (
+              <button onClick={handleMatchStart} className="action-btn primary huge-btn">开始匹配</button>
+            )}
           </div>
         </div>
 
@@ -148,9 +178,11 @@ const Lobby = ({ user, onLogout, onJoinGame, onLocalGame }) => {
           background: #2a2a2a; padding: 25px; border-radius: 12px; width: 300px; text-align: center;
         }
         .mode-card.online { border: 1px solid #d32f2f; }
+        .mode-card.match-section { border: 2px solid gold; background: linear-gradient(135deg, #2a2a2a 0%, #3e2723 100%); }
 
         .action-btn { width: 100%; padding: 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; margin-top: 10px; }
         .primary { background: #d32f2f; color: white; }
+        .primary.huge-btn { background: linear-gradient(to right, #d32f2f, #f50057); font-size: 1.2em; padding: 15px; }
         .secondary { background: #444; color: white; }
         .room-create-btn { margin-top: 20px; }
 
@@ -183,6 +215,12 @@ const Lobby = ({ user, onLogout, onJoinGame, onLocalGame }) => {
         .join-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .empty-list { text-align: center; color: #555; margin-top: 50px; }
+
+        .matching-status { padding: 10px; }
+        .spinner { 
+            width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; margin: 0 auto 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

@@ -56,17 +56,74 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
     // Opponent Card Preview
     const [opponentCardPreview, setOpponentCardPreview] = useState(null); // { card, isTrap }
 
+    const [opponentOnline, setOpponentOnline] = useState(true);
+    const opponentOnlineRef = useRef(true);
+
+    useEffect(() => {
+        opponentOnlineRef.current = opponentOnline;
+    }, [opponentOnline]);
+
     // --- Effects ---
+
+    // Socket: Player Status Listener (Online/Offline)
+    useEffect(() => {
+        if (gameMode !== 'ONLINE_GAME') return;
+
+        const handlePlayerLeft = ({ userId }) => {
+            // Assume opponent left since 1v1 and I am here
+            setOpponentOnline(false);
+            addToast('对方已断线', 'warning');
+        };
+
+        const handlePlayerJoined = () => {
+            setOpponentOnline(true);
+            addToast('对方已重连', 'success');
+        };
+
+        socket.on('player_left', handlePlayerLeft);
+        socket.on('player_joined', handlePlayerJoined);
+
+        return () => {
+            socket.off('player_left', handlePlayerLeft);
+            socket.off('player_joined', handlePlayerJoined);
+        };
+    }, [gameMode, addToast]);
+
 
     // Timer
     useEffect(() => {
         const timer = setInterval(() => {
-            if (gameState.phase !== 'GAMEOVER') {
+            const currentGameState = gameStateRef.current;
+            if (currentGameState.phase !== 'GAMEOVER') {
+                // Check Offline Timeout Win
+                // Condition: Current Turn is Opponent AND Timer <= 1 AND Opponent is Offline
+                const turn = currentGameState.turn;
+
+                // If local game, ignore.
+                if (gameMode === 'ONLINE_GAME' && turn !== myColor) {
+                    const timeLeft = currentGameState.timers[turn];
+                    if (timeLeft <= 1 && !opponentOnlineRef.current) {
+                        dispatch({ type: ActionTypes.GAME_OVER, winner: myColor, reason: '对方超时判负' });
+                        // Also notify server via action?
+                        // If we dispatch Local GAME_OVER, we see Victory.
+                        // Ideally we should emit a special 'claim_win' or just 'game_action' with GAME_OVER?
+                        // The engine reducer handles GAME_OVER action if we updated it to accept external 'reason'.
+                        // But current engine 'switchTurnLogic' just passes turn.
+                        // We are forcing a Win.
+                        // Emitting this action to server ensures opponent (if they reconnect) sees they lost.
+                        socket.emit('game_action', {
+                            roomId: activeRoomId.current,
+                            action: { type: ActionTypes.GAME_OVER, winner: myColor, reason: '对方超时判负' }
+                        });
+                        return;
+                    }
+                }
+
                 dispatch({ type: ActionTypes.TICK_TIMER });
             }
         }, 1000);
         return () => clearInterval(timer);
-    }, [gameState.phase]);
+    }, [gameState.phase, gameMode, myColor]); // Dependencies can correspond to restart conditions
 
     // Socket
     useEffect(() => {

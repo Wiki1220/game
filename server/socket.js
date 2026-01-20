@@ -1,17 +1,10 @@
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('./middleware/auth');
 const RoomManager = require('./managers/RoomManager');
-// const { createInitialState } = require('./game/engine_backend'); 
-// Or just relay actions?
-// Logic:
-// Stage 5 just needs Room setup. Gameplay is mostly Client-Side sync for now?
-// Actually Stage 4 "Engine" was moved to src/game/engine.js (Frontend).
-// Ideally Backend should validate moves. But for now, we relay actions.
-// However, the "Initial State" for game start (Assigning Colors) is Backend's job.
 
-// TODO: We need a backend version of game constants/engine to start game properly?
-// Or just send "Start" signal and let clients init?
-// Let's send { roomId, color, players } and let clients init.
+// Global Queue defined at top level to ensure availability
+const matchingQueue = [];
+const userSessions = new Map(); // userId -> socketId
 
 module.exports = (io) => {
     // Middleware
@@ -22,6 +15,26 @@ module.exports = (io) => {
         try {
             const decoded = jwt.verify(token, JWT_SECRET);
             socket.user = decoded;
+
+            // 顶号逻辑：检查该用户是否已有连接
+            const existingSocketId = userSessions.get(decoded.id);
+            if (existingSocketId) {
+                const oldSocket = io.sockets.sockets.get(existingSocketId);
+                if (oldSocket) {
+                    // 通知旧连接被踢下线 (前端可监听此事件)
+                    console.log(`User ${decoded.username} logged in from new location. Signaling kick-out to ${existingSocketId}.`);
+                    oldSocket.emit('force_disconnect', { reason: '您的账号已在别处登录' });
+                    // 延迟断开，确保消息发出
+                    setTimeout(() => {
+                        oldSocket.disconnect(true);
+                    }, 1000);
+                }
+            }
+
+            // 注册新 Session
+            userSessions.set(decoded.id, socket.id);
+            socket.userId = decoded.id; // 方便 disconnect 时查找
+
             next();
         } catch (e) {
             next(new Error('Authentication error'));
@@ -32,15 +45,21 @@ module.exports = (io) => {
         console.log(`User Connected: ${socket.user.username} (${socket.id})`);
 
         // Send initial room list
-        socket.emit('room_list', RoomManager.getPublicRooms());
+        const publicRooms = RoomManager.getPublicRooms();
+        console.log(`[Connect] Sending room list to ${socket.user.username}. Rooms: ${publicRooms.length}`);
+        socket.emit('room_list', publicRooms);
 
         // 1. Get Rooms
         socket.on('get_rooms', () => {
-            socket.emit('room_list', RoomManager.getPublicRooms());
+            const rooms = RoomManager.getPublicRooms();
+            console.log(`[GetRooms] User ${socket.user.username} requested rooms. Returning ${rooms.length} rooms.`);
+            console.log(`[Debug] Total rooms in manager: ${RoomManager.rooms.size}`);
+            socket.emit('room_list', rooms);
         });
 
         // 2. Create Room
         socket.on('create_room', (config) => {
+            console.log(`[CreateRoom] User ${socket.user.username} creating room: ${config.name} (Public: ${config.isPublic})`);
             // Config: { name, isPublic }
             const room = RoomManager.createRoom(config, socket.user, socket);
             socket.join(room.id);
@@ -55,7 +74,9 @@ module.exports = (io) => {
             });
 
             // Update Lobby for everyone
-            io.emit('room_list', RoomManager.getPublicRooms());
+            const updatedList = RoomManager.getPublicRooms();
+            console.log(`[CreateRoom] Broadcasting update. New public count: ${updatedList.length}`);
+            io.emit('room_list', updatedList);
         });
 
         // 3. Join Room
@@ -87,20 +108,9 @@ module.exports = (io) => {
             io.emit('room_list', RoomManager.getPublicRooms());
         });
 
-        // 4. Ready
+        // 4. Ready (Legacy)
         socket.on('player_ready', (isReady) => {
-            // Find room? Socket doesn't know room easily unless we track it
-            // Or client sends roomId. Client SHOULD send roomId.
-            // But secure way is: track socket->room mapping in SocketController or RoomManager.
-            // RoomManager.rooms is Map<id, Room>.
-            // We can iterate or use a reverse map.
-            // For now, let's assume client sends roomId for simplicity, but validate.
-            // Iterate RoomManager to find where socket is? Expensive.
-            // Better: socket.data.roomId
-
-            // Wait, I didn't set socket.data.roomId.
-            // Let's iterate RoomManager rooms? Or just trust client for now?
-            // Trust client with simple validation.
+            // ... legacy ...
         });
 
         // Revised Ready with RoomId
@@ -120,7 +130,6 @@ module.exports = (io) => {
                     players: Array.from(room.players.values()).map(p => ({
                         id: p.user.id, username: p.user.username, color: p.color
                     }))
-                    // Client handles initial state
                 });
                 // Update Lobby (Status Changed)
                 io.emit('room_list', RoomManager.getPublicRooms());
@@ -135,19 +144,16 @@ module.exports = (io) => {
 
         // 6. Leave / Disconnect
         const handleLeave = () => {
-            // Find room user is in. 
-            // Better: Store roomId on socket
             const roomId = socket.currentRoomId;
             if (roomId) {
                 const room = RoomManager.leaveRoom(roomId, socket.id);
                 socket.leave(roomId);
+                socket.currentRoomId = null; // Clear room ID
                 if (room) {
                     io.to(roomId).emit('player_left', { userId: socket.user.id });
                     if (room.isEmpty()) {
-                        // Already deleted in Manager
                         io.emit('room_list', RoomManager.getPublicRooms());
                     } else {
-                        // Update Room List (Player count)
                         io.emit('room_list', RoomManager.getPublicRooms());
                     }
                 }
@@ -155,8 +161,108 @@ module.exports = (io) => {
         };
 
         socket.on('leave_room', handleLeave);
-        socket.on('disconnect', handleLeave);
+        socket.on('disconnect', () => {
+            handleLeave();
 
+            // Clean up matching queue
+            const idx = matchingQueue.findIndex(s => s.id === socket.id);
+            if (idx !== -1) {
+                matchingQueue.splice(idx, 1);
+                console.log(`[MATCH] User ${socket.user.username} (Disconnected) removed from queue.`);
+            }
+
+            // Cleanup session
+            if (userSessions.get(socket.userId) === socket.id) {
+                userSessions.delete(socket.userId);
+            }
+        });
+
+
+        // 7. Matchmaking
+        socket.on('match_player', () => {
+            console.log(`[MATCH] Received match_player from ${socket.user.username}`);
+
+            // Check if already in queue or room
+            if (socket.currentRoomId) {
+                console.log(`[MATCH] User ${socket.user.username} already in room ${socket.currentRoomId}`);
+                return socket.emit('error', '已经在一个房间中了');
+            }
+            if (matchingQueue.find(s => s.id === socket.id)) {
+                console.log(`[MATCH] User ${socket.user.username} already in queue`);
+                return;
+            }
+
+            console.log(`[MATCH] User ${socket.user.username} entering queue. Current Queue: ${matchingQueue.length}`);
+
+            if (matchingQueue.length > 0) {
+                // Found opponent
+                const opponent = matchingQueue.shift();
+                console.log(`[MATCH] Found opponent: ${opponent.user.username} for ${socket.user.username}`);
+
+                // Check if opponent is still connected/valid
+                if (!opponent.connected) {
+                    console.log(`[MATCH] Opponent ${opponent.user.username} disconnected, trying next...`);
+                    // Start over (push myself and wait, or try loop?)
+                    // For simplicity, if opponent invalid, just add me to queue
+                    matchingQueue.push(socket);
+                    socket.emit('matching_wait'); // Wait for next
+                    return;
+                }
+
+                // Create Private Room
+                console.log(`[MATCH] Creating room for ${opponent.user.username} vs ${socket.user.username}`);
+                // Safe name generation to handle potential undefined
+                const name1 = opponent.user.username || 'P1';
+                const name2 = socket.user.username || 'P2';
+                const roomName = `Match-${name1.slice(0, 4)}VS${name2.slice(0, 4)}`;
+
+                const room = RoomManager.createRoom({ name: roomName, isPublic: false }, opponent.user, opponent);
+
+                // Owner Join Logic
+                opponent.join(room.id);
+                opponent.currentRoomId = room.id;
+
+                // Join Me
+                RoomManager.joinRoom(room.id, socket.user, socket);
+                socket.join(room.id);
+                socket.currentRoomId = room.id;
+
+                console.log(`[MATCH] Match Success! Room: ${room.id}`);
+
+                // Notify Opponent (Owner)
+                opponent.emit('room_joined', {
+                    roomId: room.id,
+                    isOwner: true,
+                    players: Array.from(room.players.values()).map(p => ({
+                        id: p.user.id, username: p.user.username, isReady: p.isReady, color: p.color
+                    }))
+                });
+
+                // Notify Me (Joiner)
+                socket.emit('room_joined', {
+                    roomId: room.id,
+                    isOwner: false,
+                    players: Array.from(room.players.values()).map(p => ({
+                        id: p.user.id, username: p.user.username, isReady: p.isReady, color: p.color
+                    }))
+                });
+
+            } else {
+                // Wait in queue
+                matchingQueue.push(socket);
+                console.log(`[MATCH] User ${socket.user.username} queued. Queue size: ${matchingQueue.length}`);
+                socket.emit('matching_wait');
+            }
+        });
+
+        socket.on('cancel_match', () => {
+            const idx = matchingQueue.findIndex(s => s.id === socket.id);
+            if (idx !== -1) {
+                matchingQueue.splice(idx, 1);
+                console.log(`[MATCH] User ${socket.user.username} canceled match. Queue size: ${matchingQueue.length}`);
+                socket.emit('matching_canceled');
+            }
+        });
 
     });
 };

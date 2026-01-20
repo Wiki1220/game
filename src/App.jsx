@@ -27,6 +27,12 @@ function App() {
     if (savedToken && savedUser) {
       setUser(JSON.parse(savedUser));
       setGameState('LOBBY');
+
+      // 自动连接 Socket
+      socket.auth = { token: savedToken };
+      if (!socket.connected) {
+        socket.connect();
+      }
     }
   }, []);
 
@@ -52,13 +58,12 @@ function App() {
     };
   }, [addToast]);
 
-  // Socket Event Listeners for Global Room Navigation
+  // Socket Event Listeners for Global Room Navigation & Session
   useEffect(() => {
     if (!socket) return;
 
     // 1. Room Joined -> Go to Waiting Room
     const handleRoomJoined = (info) => {
-      // info: { roomId, isOwner, players: [...] }
       console.log('Room Joined:', info);
       setRoomInfo(info);
       setActiveRoomId(info.roomId);
@@ -67,14 +72,10 @@ function App() {
 
     // 2. Game Start -> Go to Game Arena
     const handleGameStart = (data) => {
-      // data: { roomId, players: [{id, username, color}] }
       console.log('Game Starting:', data);
-
-      // Find my color
       const myData = data.players.find(p => String(p.id) === String(user.id));
       setMyColor(myData ? myData.color : 'red');
       if (data.seed) setSeed(data.seed);
-
       setGameState('GAME_ONLINE');
     };
 
@@ -83,20 +84,49 @@ function App() {
       addToast(msg, 'error');
     };
 
+    // 4. Connect Error
+    const handleConnectError = (err) => {
+      if (err.message === 'Authentication error') {
+        localStorage.removeItem('token');
+        setGameState('LOGIN');
+      }
+      addToast('连接错误: ' + err.message, 'error');
+    };
+
+    // 5. Force Disconnect (Session Kick)
+    const handleForceDisconnect = ({ reason }) => {
+      addToast('您已被强制下线: ' + reason, 'error');
+      localStorage.removeItem('token');
+      socket.disconnect();
+      setGameState('LOGIN');
+      setUser(null);
+    };
+
     socket.on('room_joined', handleRoomJoined);
     socket.on('game_start', handleGameStart);
     socket.on('error', handleError);
+    socket.on('connect_error', handleConnectError);
+    socket.on('force_disconnect', handleForceDisconnect);
 
     return () => {
       socket.off('room_joined', handleRoomJoined);
       socket.off('game_start', handleGameStart);
       socket.off('error', handleError);
+      socket.off('connect_error', handleConnectError);
+      socket.off('force_disconnect', handleForceDisconnect);
     };
-  }, [user]); // user dependency ensures we have user id for color check
+  }, [user, addToast]); // user dependency ensures we have user id for color check
 
   const handleLogin = (userData) => {
     setUser(userData);
     setGameState('LOBBY');
+
+    // 连接 Socket
+    const token = localStorage.getItem('token');
+    socket.auth = { token };
+    if (!socket.connected) {
+      socket.connect();
+    }
   };
 
   const handleLogout = () => {
@@ -118,9 +148,14 @@ function App() {
     // 1. Connect Socket
     const token = localStorage.getItem('token');
     socket.auth = { token };
-    if (!socket.connected) socket.connect();
 
-    // 2. Emit Action
+    // Always Ensure Connection
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    // 2. Emit Action (Wait for connect?)
+    // Normally emit queues if disconnected.
     if (action === 'CREATE') {
       socket.emit('create_room', config);
     } else if (action === 'JOIN') {
@@ -138,12 +173,8 @@ function App() {
   };
 
   const handleQuitGame = () => {
-    // If online, leave room
     if (gameState === 'GAME_ONLINE' && activeRoomId) {
       socket.emit('leave_room');
-      // Disconnect socket for clean slate? 
-      // Or keep connected for lobby?
-      // Keep connected usually.
     }
     setGameState('LOBBY');
     setActiveRoomId(null);
@@ -151,7 +182,6 @@ function App() {
   };
 
   // --- RENDER ---
-
   if (gameState === 'LOGIN') {
     return <Login onLogin={handleLogin} onGuest={handleLogin} />;
   }
@@ -193,7 +223,7 @@ function App() {
     <Lobby
       user={user}
       onLogout={handleLogout}
-      onJoinGame={handleRoomAction} // Pass the handler
+      onJoinGame={handleRoomAction}
       onLocalGame={handleStartLocalGame}
     />
   );
