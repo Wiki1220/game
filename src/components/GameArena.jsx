@@ -7,6 +7,7 @@ import { getPieceMoves } from '../game/pieces';
 import Card from './Card';
 import { PLAYERS, PHASES } from '../game/constants';
 import { socket } from '../game/socket';
+import { useToast } from './common/Toast';
 
 // Localization Helpers
 const PIECE_NAMES = {
@@ -37,6 +38,12 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
     const [myColor, setMyColor] = useState(myInitialColor || PLAYERS.RED);
     const [roomId, setRoomId] = useState(initialRoomId);
     const activeRoomId = useRef(initialRoomId);
+    const { addToast } = useToast();
+
+    // Sync myColor from props
+    useEffect(() => {
+        if (myInitialColor) setMyColor(myInitialColor);
+    }, [myInitialColor]);
 
     // Notification State
     const [notification, setNotification] = useState(null); // { message, detail }
@@ -99,6 +106,12 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                     }
                 }
             }
+
+            // Trap Trigger Check
+            if (lastEntry.text && lastEntry.text.includes('触发了陷阱')) {
+                setNotification({ message: lastEntry.text });
+                setTimeout(() => setNotification(null), 2000);
+            }
         }
     }, [gameState.log, myColor, gameMode, gameState.turn]);
 
@@ -116,10 +129,34 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
     };
 
     // --- Handlers ---
+    // --- Handlers ---
+
+    const getStatusMessage = () => {
+        const { phase, turn } = gameState;
+        const isMyTurn = gameMode === 'LOCAL' ? true : turn === myColor;
+
+        if (notification) return notification.message;
+
+        if (phase === 'DRAFT') {
+            if (gameMode === 'LOCAL') return `${turn === 'red' ? '红方' : '黑方'} 正在选牌`;
+            return isMyTurn ? "请挑选你的锦囊" : "对手正在选择锦囊";
+        }
+        if (phase === 'PLAY_CARD') {
+            if (gameMode === 'LOCAL') return `${turn === 'red' ? '红方' : '黑方'} 行动`;
+            return isMyTurn ? "你的回合: 请使用锦囊或移动" : "对手正在思考...";
+        }
+        return "游戏进行中";
+    };
+
     const handleGameAction = (action) => {
-        dispatch(action);
-        if (gameMode === 'ONLINE_GAME') {
-            socket.emit('game_action', { roomId: activeRoomId.current, action });
+        try {
+            dispatch(action);
+            if (gameMode === 'ONLINE_GAME') {
+                socket.emit('game_action', { roomId: activeRoomId.current, action });
+            }
+        } catch (e) {
+            console.error("Game Action Error:", e);
+            addToast(`操作失败: ${e.message}`, 'error');
         }
     };
 
@@ -140,43 +177,48 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
     };
 
     const handleSquareClick = (x, y) => {
-        if (gameState.phase === 'GAMEOVER') return;
-        if (gameMode === 'ONLINE_GAME' && gameState.turn !== myColor) return;
+        try {
+            if (gameState.phase === 'GAMEOVER') return;
+            if (gameMode === 'ONLINE_GAME' && gameState.turn !== myColor) return;
 
-        const { board, turn, validMoves, pendingCard } = gameState;
+            const { board, turn, validMoves, pendingCard } = gameState;
 
-        // 1. Pending Card Targeting
-        if (pendingCard) {
+            // 1. Pending Card Targeting
+            if (pendingCard) {
+                const clickedPiece = board.find(p => p.x === x && p.y === y);
+                // Empty Target (e.g. Summon)
+                if (!clickedPiece && pendingCard.targetEmpty) {
+                    handleGameAction({ type: ActionTypes.SELECT_PIECE, payload: { x, y } });
+                    return;
+                }
+                // Piece Target (Self/Enemy/Type checks will be done by Engine resolve)
+                if (clickedPiece) {
+                    handleGameAction({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: clickedPiece.id, x, y } });
+                    return;
+                }
+                // Invalid click -> Cancel Card
+                handleGameAction({ type: ActionTypes.CANCEL_CARD });
+                return;
+            }
+
+            // 2. Move Logic
+            const isMoveTarget = validMoves.some(m => m.x === x && m.y === y);
+            if (isMoveTarget) {
+                handleGameAction({
+                    type: ActionTypes.MOVE_PIECE,
+                    payload: { pieceId: gameState.selectedPieceId, toX: x, toY: y }
+                });
+                return;
+            }
+
+            // 3. Select Piece (Friendly)
             const clickedPiece = board.find(p => p.x === x && p.y === y);
-            // Empty Target (e.g. Summon)
-            if (!clickedPiece && pendingCard.targetEmpty) {
-                handleGameAction({ type: ActionTypes.SELECT_PIECE, payload: { x, y } });
-                return;
+            if (clickedPiece && clickedPiece.player === turn) {
+                dispatch({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: clickedPiece.id } });
             }
-            // Piece Target (Self/Enemy/Type checks will be done by Engine resolve)
-            if (clickedPiece) {
-                handleGameAction({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: clickedPiece.id, x, y } });
-                return;
-            }
-            // Invalid click -> Cancel Card
-            handleGameAction({ type: ActionTypes.CANCEL_CARD });
-            return;
-        }
-
-        // 2. Move Logic
-        const isMoveTarget = validMoves.some(m => m.x === x && m.y === y);
-        if (isMoveTarget) {
-            handleGameAction({
-                type: ActionTypes.MOVE_PIECE,
-                payload: { pieceId: gameState.selectedPieceId, toX: x, toY: y }
-            });
-            return;
-        }
-
-        // 3. Select Piece (Friendly)
-        const clickedPiece = board.find(p => p.x === x && p.y === y);
-        if (clickedPiece && clickedPiece.player === turn) {
-            dispatch({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: clickedPiece.id } });
+        } catch (e) {
+            console.error("Board Interaction Error:", e);
+            addToast(`游戏逻辑错误: ${e.message}`, 'error');
         }
     };
 
@@ -288,6 +330,7 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                         selectableTargets={selectableTargets.pieces}
                         selectableEmptyPositions={selectableTargets.positions}
                         summonedPieces={gameState.summonedPieces}
+                        flip={gameMode === 'ONLINE_GAME' && myColor === 'black'}
                     />
                 </div>
 
@@ -325,19 +368,20 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                         );
                     })()}
 
-                    {/* Action Log */}
-                    <div className="sidebar-section action-log-section">
+                    {/* Status Panel (Replaces Log) */}
+                    <div className="sidebar-section status-panel">
                         <div className="section-header">
-                            <span>📜 行动历史</span>
+                            <span>⏳ 状态 (剩余 {Math.ceil(gameState.timers[gameState.turn] || 60)}s)</span>
                         </div>
-                        <div className="log-list">
-                            {gameState.log.slice(-8).reverse().map((entry, idx) => (
-                                <div key={idx} className="log-entry">
-                                    <span className="log-text">{entry.text}</span>
-                                </div>
-                            ))}
-                            {gameState.log.length === 0 && (
-                                <div className="empty-log">暂无行动</div>
+                        <div className="status-content" style={{ padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px', minHeight: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                            {notification ? (
+                                <span style={{ color: '#ff4444', fontWeight: 'bold', fontSize: '1.2em' }}>
+                                    ⚠️ {notification.message}
+                                </span>
+                            ) : (
+                                <span style={{ color: '#fff', fontSize: '1.1em' }}>
+                                    {getStatusMessage()}
+                                </span>
                             )}
                         </div>
                     </div>

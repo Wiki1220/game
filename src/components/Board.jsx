@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import './Board.css';
 
-const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMove, lastOpponentMove, traps, activeBuffs, selectableTargets = [], selectableEmptyPositions = [], summonedPieces = [] }) => {
+const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMove, lastOpponentMove, traps, activeBuffs, selectableTargets = [], selectableEmptyPositions = [], summonedPieces = [], flip = false }) => {
     // Local state for hover tooltip
     const [hoveredPieceId, setHoveredPieceId] = useState(null);
 
@@ -131,15 +131,28 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                         {isOpponentFrom && <div className="opponent-move-marker from" />}
                         {isOpponentTo && <div className="opponent-move-marker to" />}
 
-                        {piece && (
-                            <div className={`piece ${piece.player} ${piece.type} ${isSelected ? 'selected' : ''} ${selectableTargets.includes(piece.id) ? 'selectable-target' : ''} ${summonedPieces.includes(piece.id) ? 'summoned-piece' : ''}`}>
-                                <span className="piece-text">
-                                    {getPieceChar(piece.type, piece.player)}
-                                </span>
-                                {/* Tooltip */}
-                                {hoveredPieceId === piece.id && getPieceTooltip(piece)}
-                            </div>
-                        )}
+                        {piece && (() => {
+                            // Calculate transform to preserve rotation AND scale/animation
+                            let transformStyle = flip ? 'rotate(180deg)' : undefined;
+                            if (isSelected && flip) transformStyle = 'rotate(180deg) scale(1.15)'; // Manually compose if flipped
+
+                            // Determine class for animation
+                            const isTarget = selectableTargets.includes(piece.id);
+                            const targetClass = isTarget ? (flip ? 'selectable-target-flipped' : 'selectable-target') : '';
+
+                            return (
+                                <div
+                                    className={`piece ${piece.player} ${piece.type} ${isSelected ? 'selected' : ''} ${targetClass} ${summonedPieces.includes(piece.id) ? 'summoned-piece' : ''}`}
+                                    style={{ transform: transformStyle }}
+                                >
+                                    <span className="piece-text">
+                                        {getPieceChar(piece.type, piece.player)}
+                                    </span>
+                                    {/* Tooltip */}
+                                    {hoveredPieceId === piece.id && getPieceTooltip(piece)}
+                                </div>
+                            );
+                        })()}
 
                         {isValidMove && !piece && <div className="highlight-overlay target" />}
                         {isValidMove && piece && <div className="highlight-overlay capture" />}
@@ -153,7 +166,7 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
 
     return (
         <div className="board-container">
-            <div className="xiangqi-board">
+            <div className="xiangqi-board" style={{ transform: flip ? 'rotate(180deg)' : 'none' }}>
                 {renderGrid()}
                 {renderCells()}
             </div>
@@ -202,18 +215,32 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                     pointer-events: none;
                 }
                 
-                .selectable-target {
-                    animation: pulse-scale 1s ease-in-out infinite;
-                }
-                
                 @keyframes pulse-scale {
                     0%, 100% { transform: scale(1); }
                     50% { transform: scale(1.15); }
+                }
+
+                @keyframes pulse-scale-flipped {
+                    0%, 100% { transform: rotate(180deg) scale(1); }
+                    50% { transform: rotate(180deg) scale(1.15); }
+                }
+                
+                .selectable-target {
+                    animation: pulse-scale 1s ease-in-out infinite;
+                }
+                .selectable-target-flipped {
+                    animation: pulse-scale-flipped 1s ease-in-out infinite;
                 }
                 
                 .summoned-piece {
                     border-bottom: 3px solid #ffd700;
                     box-shadow: 0 2px 0 0 rgba(255, 215, 0, 0.5);
+                }
+                
+                .piece.neutral {
+                    color: #5d4037;
+                    border-color: #4e342e;
+                    background: #e0e0e0;
                 }
             `}</style>
         </div>
@@ -223,9 +250,13 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
 const getPieceChar = (type, player) => {
     const chars = {
         red: { general: '帅', advisor: '仕', elephant: '相', horse: '马', chariot: '车', cannon: '炮', soldier: '兵' },
-        black: { general: '将', advisor: '士', elephant: '象', horse: '马', chariot: '车', cannon: '炮', soldier: '卒' }
+        black: { general: '将', advisor: '士', elephant: '象', horse: '马', chariot: '车', cannon: '炮', soldier: '卒' },
+        neutral: { roadblock: '障', jackpot: '奖', arsenal: '武', soldier: '援' }
     };
-    return chars[player][type];
+    if (chars[player] && chars[player][type]) return chars[player][type];
+    // Try neutral fallback for summons, or return ?
+    if (chars.neutral[type]) return chars.neutral[type];
+    return '?';
 };
 
 export default Board;

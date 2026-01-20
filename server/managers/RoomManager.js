@@ -28,7 +28,8 @@ class RoomManager {
     getPublicRooms() {
         const list = [];
         for (const room of this.rooms.values()) {
-            if (room.config.isPublic && !room.isFull()) {
+            // Must be Public, Waiting, and Not Full
+            if (room.config.isPublic && room.status === 'WAITING' && !room.isFull()) {
                 list.push(room.getPublicInfo());
             }
         }

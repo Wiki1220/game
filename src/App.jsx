@@ -5,8 +5,10 @@ import GameArena from './components/GameArena';
 import WaitingRoom from './components/WaitingRoom';
 import { socket } from './game/socket';
 import './index.css';
+import { useToast } from './components/common/Toast';
 
 function App() {
+  const { addToast } = useToast();
   const [user, setUser] = useState(null);
   const [gameState, setGameState] = useState('LOGIN'); // LOGIN, LOBBY, WAITING_ROOM, GAME_LOCAL, GAME_ONLINE
 
@@ -28,6 +30,28 @@ function App() {
     }
   }, []);
 
+  // Global Error Listener
+  useEffect(() => {
+    const handleGlobalError = (event) => {
+      let msg = event.reason ? (typeof event.reason === 'string' ? event.reason : event.reason.message) : event.message;
+      if (!msg && event.error) msg = event.error.message;
+      if (!msg) msg = "未知错误";
+
+      // Filter out ResizeObserver loop limit exceeded (Standard React ignore)
+      if (msg.includes('ResizeObserver')) return;
+
+      addToast(`系统错误: ${msg}`, 'error');
+    };
+
+    window.addEventListener('error', handleGlobalError);
+    window.addEventListener('unhandledrejection', handleGlobalError);
+
+    return () => {
+      window.removeEventListener('error', handleGlobalError);
+      window.removeEventListener('unhandledrejection', handleGlobalError);
+    };
+  }, [addToast]);
+
   // Socket Event Listeners for Global Room Navigation
   useEffect(() => {
     if (!socket) return;
@@ -47,7 +71,7 @@ function App() {
       console.log('Game Starting:', data);
 
       // Find my color
-      const myData = data.players.find(p => p.id === user.id);
+      const myData = data.players.find(p => String(p.id) === String(user.id));
       setMyColor(myData ? myData.color : 'red');
       if (data.seed) setSeed(data.seed);
 
@@ -56,7 +80,7 @@ function App() {
 
     // 3. Error
     const handleError = (msg) => {
-      alert(msg); // Simple alert for now
+      addToast(msg, 'error');
     };
 
     socket.on('room_joined', handleRoomJoined);
