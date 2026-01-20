@@ -86,8 +86,8 @@ pm2 restart game
 **排查**：
 ```bash
 pm2 list
-netstat -tulpn | grep :3333
-curl http://127.0.0.1:3333
+netstat -tulpn | grep :80
+curl http://127.0.0.1:80
 ```
 
 #### 问题 2：端口 Connection Refused
@@ -172,7 +172,7 @@ PORT=3001 node index.js
 ### 服务器信息
 
 - **IP**：120.26.212.80
-- **端口**：3333
+- **端口**：80
 - **用户**：root
 - **密码**：Game2026
 - **部署目录**：`/var/www/game`

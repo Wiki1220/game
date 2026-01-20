@@ -176,7 +176,7 @@ async function deploy() {
       cd /var/www/game/server
       npm install --production --silent
       pm2 delete game 2>/dev/null || true
-      PORT=3333 pm2 start index.js --name game
+      PORT=80 pm2 start index.js --name game
       pm2 save
       sleep 2
       echo "部署完成"
@@ -192,8 +192,8 @@ async function deploy() {
         step(6, '验证服务状态...');
         const verifyCmd = `
       pm2 list | grep game | grep online && 
-      netstat -tulpn | grep :3333 &&
-      curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3333
+      netstat -tulpn | grep :80 &&
+      curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:80
     `;
 
         const verifyResult = await sshExec(verifyCmd);
@@ -210,11 +210,11 @@ async function deploy() {
       # 测试静态文件
       test -f ../dist/index.html || exit 1
       # 测试 Socket.IO 端点
-      curl -s http://127.0.0.1:3333/socket.io/ | grep -q "0" || exit 1
+      curl -s http://127.0.0.1:80/socket.io/ | grep -q "0" || exit 1
       # 测试数据库健康状态
-      curl -s http://127.0.0.1:3333/api/health | grep -q "connected" || exit 1
+      curl -s http://127.0.0.1:80/api/health | grep -q "connected" || exit 1
       # 测试 Auth API (游客登录)
-      curl -s -X POST http://127.0.0.1:3333/api/auth/guest -H "Content-Type: application/json" | grep -q "token" || exit 1
+      curl -s -X POST http://127.0.0.1:80/api/auth/guest -H "Content-Type: application/json" | grep -q "token" || exit 1
       echo "测试通过"
     `;
 
@@ -233,7 +233,7 @@ async function deploy() {
         log('\n===========================================', 'green');
         log('    ✓✓✓ 部署成功！', 'green');
         log('===========================================', 'green');
-        log(`\n游戏地址: http://120.26.212.80:3333`, 'blue');
+        log(`\n游戏地址: http://120.26.212.80`, 'blue');
         log(`部署时间: ${new Date().toLocaleString('zh-CN')}\n`, 'blue');
 
         return true;

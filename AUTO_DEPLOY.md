@@ -197,7 +197,7 @@ scripts/
 const testCmd = `
   cd /var/www/game
   npm test  # 如果有测试脚本
-  curl -s http://127.0.0.1:3333/api/health
+  curl -s http://127.0.0.1:80/api/health
 `;
 ```
 
