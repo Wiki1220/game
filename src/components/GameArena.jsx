@@ -266,7 +266,7 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                 <div className="modal-overlay">
                     <div className="modal-content victory-modal">
                         <h1>
-                            {gameState.log.find(l => l.action === 'WIN')?.info.includes(myColor)
+                            {gameState.winner === myColor
                                 ? "🏆 胜利！"
                                 : (gameMode === 'LOCAL' ? "游戏结束" : "💀 败北")}
                         </h1>
@@ -627,9 +627,14 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
         .victory-modal {
             background: #222;
             color: white;
-            padding: 40px;
+            padding: 60px;
+            width: 500px;
             text-align: center;
             border: 2px solid gold;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            position: relative;
+            z-index: 1000;
         }
         .victory-modal h1 { font-size: 3em; margin-bottom: 30px; }
 

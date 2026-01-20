@@ -44,6 +44,7 @@ module.exports = (io) => {
             // Config: { name, isPublic }
             const room = RoomManager.createRoom(config, socket.user, socket);
             socket.join(room.id);
+            socket.currentRoomId = room.id;
 
             socket.emit('room_joined', {
                 roomId: room.id,
@@ -66,6 +67,7 @@ module.exports = (io) => {
 
             const room = result.room;
             socket.join(roomId);
+            socket.currentRoomId = roomId;
 
             // Notify Me
             socket.emit('room_joined', {
@@ -155,11 +157,6 @@ module.exports = (io) => {
         socket.on('leave_room', handleLeave);
         socket.on('disconnect', handleLeave);
 
-        // Helper to track room
-        socket.on('join_room', (roomId) => { socket.currentRoomId = roomId; });
-        socket.on('create_room', () => {
-            // Wait, create_room handler above didn't set currentRoomId.
-            // Let's fix create_room logic above to set socket.currentRoomId
-        });
+
     });
 };
