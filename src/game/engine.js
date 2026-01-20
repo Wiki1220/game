@@ -582,13 +582,20 @@ const resolveCardEffect = (state, card, targetId = null, targetPos = null) => {
             });
             break;
         case 'TRAP_OVERLOAD':
-            newState.globalRules.push({
-                id: 'TRAP_OVERLOAD',
-                name: '过载',
-                type: '陷阱',
-                owner: player,
-                count: 0
-            });
+            {
+                const currentTraps = newState.globalRules.filter(r => r.owner === player && (r.type === '陷阱' || r.type === CARD_TYPES.TRAP));
+                if (currentTraps.length >= 2) {
+                    newState.log.push({ text: `${player === 'red' ? '红方' : '黑方'} 陷阱已达上限 (2/2)，无法盖放。` });
+                    break;
+                }
+                newState.globalRules.push({
+                    id: 'TRAP_OVERLOAD',
+                    name: '过载',
+                    type: '陷阱',
+                    owner: player,
+                    count: 0
+                });
+            }
             break;
         case 'SPEED_SHRUG':
             newState.activeBuffs.push({ effectId: 'SPEED_SHRUG', player, duration: 1 });

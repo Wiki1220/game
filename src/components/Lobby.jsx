@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { socket } from '../game/socket';
 import CreateRoomModal from './CreateRoomModal';
 import ProfilePage from './ProfilePage';
+import SettingsModal from './SettingsModal';
 
 // 头像显示
 const AVATAR_DISPLAY = {
@@ -18,6 +19,7 @@ const Lobby = ({ user, onLogout, onJoinGame, onLocalGame }) => {
   const [showProfile, setShowProfile] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   useEffect(() => {
     const handleRoomList = (list) => {
@@ -94,6 +96,13 @@ const Lobby = ({ user, onLogout, onJoinGame, onLocalGame }) => {
         />
       )}
 
+      {showRules && (
+        <SettingsModal
+          initialView="RULES"
+          onClose={() => setShowRules(false)}
+        />
+      )}
+
       {/* 现代化头部导航 */}
       <header className="lobby-header">
         <div className="header-left">
@@ -132,6 +141,10 @@ const Lobby = ({ user, onLogout, onJoinGame, onLocalGame }) => {
               <button className="dropdown-item" onClick={() => { setShowProfile(true); setShowUserMenu(false); }}>
                 <span className="item-icon">👤</span>
                 个人资料
+              </button>
+              <button className="dropdown-item" onClick={() => { setShowRules(true); setShowUserMenu(false); }}>
+                <span className="item-icon">📜</span>
+                游戏规则
               </button>
               <div className="dropdown-divider"></div>
               <button className="dropdown-item logout" onClick={onLogout}>

@@ -1,53 +1,62 @@
 import React, { useState } from 'react';
 import './SettingsModal.css';
 
-const RULES_TEXT = `
-## 游戏规则介绍
+const RULES_DATA = [
+    {
+        title: "🎯 基础规则",
+        content: [
+            "获胜条件: 吃掉对方的“将/帅”。",
+            "基本走发: 遵循中国象棋标准规则。",
+            "思考时间: 每回合 60 秒。超时自动跳过当前回合。"
+        ]
+    },
+    {
+        title: "🃏 卡牌系统",
+        content: [
+            "选牌阶段: 回合开始时 3选1。手牌上限 3 张。",
+            "✦ 通常 (Normal): 使用后不消耗回合，可继续行棋。",
+            "★ 行动 (Action): 强力卡牌，使用后立即结束回合。",
+            "⚔ 速攻: 仅在当前回合生效的临时卡。",
+            "▼ 陷阱: 隐蔽布置，敌方触发时生效。",
+            "∞ 永续: 全局规则改变，场上仅限一张。",
+            "◆ 召唤: 放置障碍或辅助单位 (场上上限2个)。"
+        ]
+    },
+    {
+        title: "⚠️ 特殊机制",
+        content: [
+            "召唤轮替: 当召唤第3个单位时，最早的召唤物自动销毁。",
+            "炮架自毁: 炮利用召唤物做炮架吃子后，自身也会销毁。",
+            "稀有度同步: 对手选牌的稀有度决定你下回合选牌的稀有度。"
+        ]
+    }
+];
 
-**1. 基本玩法**
-本游戏基于中国象棋规则，融合了卡牌构建(Roguelike)元素。
-- **胜利条件**：吃掉对方的"将/帅"。
-- **回合制**：双方轮流行动。每个回合你可以**使用卡牌**或**移动棋子**。
-
-**2. 独特的卡牌系统**
-- **锦囊（手牌）**：手牌上限为3张。当手牌已满时，回合开始将跳过选牌阶段。
-- **阶段**：
-  1. **选牌阶段**：回合开始时从3张卡牌中选择1张加入手牌（手牌满时跳过）。
-  2. **出牌阶段**：你可以打出任意数量的卡牌来增强棋子、改变地形或布置陷阱。
-  3. **移动阶段**：打完牌后，你必须移动一个棋子（除非卡牌效果跳过了移动）。
-
-**3. 召唤物规则**
-- **召唤上限**：场上最多同时存在2个召唤物（路障、援军等）。
-- **超限淘汰**：当召唤第3个召唤物时，最早召唤的那个会自动消失（FIFO规则）。
-- **炮架特性**：若炮吃子时使用召唤物作为炮架，吃子后炮本身也会一同消灭。普通棋子作为炮架不受此影响。
-
-**4. 对局记录**
-所有行动都会被记录在右侧的"战况"中，你可以随时查看。
-
-**5. 计时**
-每方有10分钟思考时间，超时判负。
-
-**特殊说明**：部分卡牌（如"践踏"、"飞行"）会改变基础象棋规则，请留意卡牌描述。
-`;
-
-const SettingsModal = ({ onClose, onSurrender, onQuit }) => {
-    const [view, setView] = useState('MENU'); // MENU | RULES
+const SettingsModal = ({ onClose, onSurrender, onQuit, initialView = 'MENU' }) => {
+    const [view, setView] = useState(initialView);
 
     return (
         <div className="settings-overlay" onClick={onClose}>
-            <div className="settings-modal" onClick={e => e.stopPropagation()}>
+            <div className={`settings-modal ${view === 'RULES' ? 'wide' : ''}`} onClick={e => e.stopPropagation()}>
                 {view === 'MENU' ? (
                     <>
                         <h3>游戏设置</h3>
-                        <button className="settings-btn" onClick={() => setView('RULES')}>
+                        <button className="settings-btn rules" onClick={() => setView('RULES')}>
                             📜 规则介绍
                         </button>
-                        <button className="settings-btn surrender" onClick={onSurrender}>
-                            🏳️ 投降
-                        </button>
-                        <button className="settings-btn quit" onClick={onQuit}>
-                            🚪 退出游戏
-                        </button>
+
+                        {onSurrender && (
+                            <button className="settings-btn surrender" onClick={onSurrender}>
+                                🏳️ 投降
+                            </button>
+                        )}
+
+                        {onQuit && (
+                            <button className="settings-btn quit" onClick={onQuit}>
+                                🚪 退出游戏
+                            </button>
+                        )}
+
                         <button className="settings-btn close" onClick={onClose}>
                             关闭
                         </button>
@@ -56,12 +65,19 @@ const SettingsModal = ({ onClose, onSurrender, onQuit }) => {
                     <>
                         <h3>规则说明</h3>
                         <div className="rules-content">
-                            {RULES_TEXT.split('\n').map((line, i) => (
-                                <div key={i}>{line}</div>
+                            {RULES_DATA.map((section, i) => (
+                                <div key={i} className="rule-section">
+                                    <h4>{section.title}</h4>
+                                    <ul>
+                                        {section.content.map((line, j) => (
+                                            <li key={j}>{line}</li>
+                                        ))}
+                                    </ul>
+                                </div>
                             ))}
                         </div>
-                        <button className="settings-btn close" onClick={() => setView('MENU')}>
-                            返回
+                        <button className="settings-btn close" onClick={() => initialView === 'RULES' ? onClose() : setView('MENU')}>
+                            {initialView === 'RULES' ? '关闭' : '返回'}
                         </button>
                     </>
                 )}

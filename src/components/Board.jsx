@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import './Board.css';
 
-const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMove, lastOpponentMove, traps, activeBuffs, selectableTargets = [], selectableEmptyPositions = [], summonedPieces = [], flip = false }) => {
+const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMove, lastOpponentMove, traps, activeBuffs, selectableTargets = [], selectableEmptyPositions = [], summonedPieces = [], flip = false, extraHighlight = null }) => {
     // Local state for hover tooltip
     const [hoveredPieceId, setHoveredPieceId] = useState(null);
 
@@ -118,6 +118,9 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                 // Selectable for card target
                 const isSelectableEmpty = selectableEmptyPositions.some(pos => pos.x === x && pos.y === y);
 
+                // Extra Highlight (Blue) for Notifications
+                const isExtraHighlight = extraHighlight && extraHighlight.x === x && extraHighlight.y === y;
+
                 cellsArray.push(
                     <div
                         key={`${x}-${y}`}
@@ -158,12 +161,15 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                         {isValidMove && !piece && <div className="highlight-overlay target" />}
                         {isValidMove && piece && <div className="highlight-overlay capture" />}
                         {isSelectableEmpty && <div className="highlight-overlay target" />}
+
+                        {/* Extra Highlight Overlay */}
+                        {isExtraHighlight && <div className="highlight-overlay extra" />}
                     </div>
                 );
             }
         }
         return cellsArray;
-    }, [boardState, selectedPieceId, validMoves, lastMove, lastOpponentMove, selectableTargets, selectableEmptyPositions, summonedPieces, flip, hoveredPieceId, traps, activeBuffs]);
+    }, [boardState, selectedPieceId, validMoves, lastMove, lastOpponentMove, selectableTargets, selectableEmptyPositions, summonedPieces, flip, hoveredPieceId, traps, activeBuffs, extraHighlight]);
 
     return (
         <div className="board-container">
@@ -172,6 +178,17 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                 {cells}
             </div>
             <style>{`
+                .highlight-overlay.extra {
+                    position: absolute;
+                    top: 0; left: 0;
+                    width: 100%; height: 100%;
+                    border: 3px solid #2196f3;
+                    background-color: rgba(33, 150, 243, 0.3);
+                    z-index: 10;
+                    box-shadow: 0 0 15px #2196f3;
+                    pointer-events: none;
+                }
+                
                 .last-move-marker {
                     position: absolute;
                     width: 100%; height: 100%;

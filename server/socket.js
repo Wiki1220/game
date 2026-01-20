@@ -158,6 +158,10 @@ module.exports = (io) => {
                 room.gameStartedAt = new Date();
                 room.gameLogId = LoggerService.generateGameLogId();
 
+                // Cache User Information for Game End
+                room.cachedRedUser = redPlayer?.user;
+                room.cachedBlackUser = blackPlayer?.user;
+
                 console.log(`[GAME] Game started in room ${roomId}. Log ID: ${room.gameLogId}`);
 
                 // 记录用户行为日志
@@ -196,10 +200,12 @@ module.exports = (io) => {
                     winner,
                     end_reason,
                     total_turns = 0,
-                    red_player,
-                    black_player,
                     game_log_data
                 } = result;
+
+                // Retrieve cached users (Fallback to socket user if local 1v1? No room manager is truth)
+                const redUser = room?.cachedRedUser;
+                const blackUser = room?.cachedBlackUser;
 
                 console.log(`[GAME] Game ended in room ${roomId}. Winner: ${winner}, Reason: ${end_reason}`);
 
@@ -207,12 +213,16 @@ module.exports = (io) => {
                 const record = await GameRecord.create({
                     room_id: roomId,
                     game_log_id: room?.gameLogId || LoggerService.generateGameLogId(),
-                    red_player_id: red_player?.id || null,
-                    red_player_type: red_player?.is_guest ? 'guest' : 'user',
-                    red_username: red_player?.username || 'Unknown',
-                    black_player_id: black_player?.id || null,
-                    black_player_type: black_player?.is_guest ? 'guest' : 'user',
-                    black_username: black_player?.username || 'Unknown',
+                    red_player_id: redUser?.id || null,
+                    red_player_type: redUser?.is_guest ? 'guest' : 'user',
+                    red_guest_id: redUser?.is_guest ? redUser.guest_id : null,
+                    red_username: redUser?.username || 'Unknown',
+
+                    black_player_id: blackUser?.id || null,
+                    black_player_type: blackUser?.is_guest ? 'guest' : 'user',
+                    black_guest_id: blackUser?.is_guest ? blackUser.guest_id : null,
+                    black_username: blackUser?.username || 'Unknown',
+
                     winner: winner || 'none',
                     end_reason: end_reason || 'unknown',
                     total_turns: total_turns,
@@ -252,6 +262,10 @@ module.exports = (io) => {
                         end_reason
                     }
                 });
+
+                // Update User Stats (Async, no await needed to block response)
+                updateUserStats(redUser, winner === 'red', winner === 'draw').catch(err => console.error('Stats Update Error:', err));
+                updateUserStats(blackUser, winner === 'black', winner === 'draw').catch(err => console.error('Stats Update Error:', err));
 
                 // 返回记录ID给前端
                 socket.emit('game_record_saved', {
@@ -399,3 +413,42 @@ module.exports = (io) => {
 
     });
 };
+
+// Helper: Update User Stats
+async function updateUserStats(userObj, isWin, isDraw) {
+    if (!userObj) return;
+
+    try {
+        if (userObj.is_guest) {
+            const guest = await Guest.findByPk(userObj.id);
+            if (guest) {
+                guest.total_games = (guest.total_games || 0) + 1;
+                if (isWin) guest.wins = (guest.wins || 0) + 1;
+                else if (!isDraw) guest.losses = (guest.losses || 0) + 1;
+                await guest.save();
+            }
+        } else {
+            // User
+            const user = await User.findByPk(userObj.id);
+            if (user) {
+                user.total_games = (user.total_games || 0) + 1;
+                if (isWin) user.wins = (user.wins || 0) + 1;
+                else if (isDraw) user.draws = (user.draws || 0) + 1;
+                else user.losses = (user.losses || 0) + 1;
+
+                // Win Streak
+                if (isWin) {
+                    user.win_streak = (user.win_streak || 0) + 1;
+                    if (user.win_streak > (user.max_win_streak || 0)) {
+                        user.max_win_streak = user.win_streak;
+                    }
+                } else if (!isDraw) {
+                    user.win_streak = 0;
+                }
+                await user.save();
+            }
+        }
+    } catch (e) {
+        console.error('Failed to update stats for user:', userObj.id, e);
+    }
+}

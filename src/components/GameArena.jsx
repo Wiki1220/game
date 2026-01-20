@@ -8,6 +8,8 @@ import Card from './Card';
 import { PLAYERS, PHASES } from '../game/constants';
 import { socket } from '../game/socket';
 import { useToast } from './common/Toast';
+import ActionNotification from './ActionNotification';
+import { CARD_TYPES, CARD_DATA } from '../game/cardDefs';
 import './GameArena.css';
 
 // Localization Helpers
@@ -55,6 +57,9 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
 
     // Opponent Card Preview
     const [opponentCardPreview, setOpponentCardPreview] = useState(null); // { card, isTrap }
+    const [notifications, setNotifications] = useState([]);
+    const [extraHighlight, setExtraHighlight] = useState(null);
+    const notificationIdRef = useRef(0); // 避免 ID 碰撞
 
     const [opponentOnline, setOpponentOnline] = useState(true);
     const opponentOnlineRef = useRef(true);
@@ -83,6 +88,9 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
         if (gameMode !== 'ONLINE_GAME') return;
 
         const handleRemoteAction = (action) => {
+            // 先捕获当前状态用于通知计算 (dispatch 前)
+            const preDispatchState = gameStateRef.current;
+
             // Record remote action
             actionHistory.current.push({
                 seq: actionHistory.current.length + 1,
@@ -91,11 +99,54 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                 action
             });
             dispatch(action);
+
+            // Notification Logic for Opponent Actions
+            if (action.type === ActionTypes.PLAY_CARD) {
+                // action 结构: { type, payload: { card, targetId?, targetPos? } }
+                const payload = action.payload || {};
+                let card = payload.card;
+                if (!card && payload.cardId) {
+                    card = CARD_DATA.find(c => c.id === payload.cardId) || { name: '未知卡牌', type: '未知' };
+                }
+
+                if (card) {
+                    const isTrap = card.type === CARD_TYPES.TRAP || card.type === '陷阱';
+                    // Opponent Color (Assuming I am playing and it's 1v1 online)
+                    const opponentColor = myColor === 'red' ? 'black' : 'red';
+
+                    if (isTrap) {
+                        // 使用 dispatch 前的状态计算陷阱数量
+                        const traps = preDispatchState.globalRules.filter(r => r.owner === opponentColor && (r.type === '陷阱' || r.type === CARD_TYPES.TRAP));
+                        const count = Math.min(2, traps.length + 1);
+
+                        setNotifications(prev => [...prev, {
+                            id: ++notificationIdRef.current,
+                            type: 'TRAP_SET',
+                            count
+                        }]);
+                    } else {
+                        let targetText = '';
+                        if (payload.targetId) {
+                            const p = preDispatchState.board.find(bp => bp.id === payload.targetId);
+                            if (p && PIECE_NAMES[p.player]) targetText = PIECE_NAMES[p.player][p.type];
+                        }
+
+                        setNotifications(prev => [...prev, {
+                            id: ++notificationIdRef.current,
+                            type: 'PLAY_CARD',
+                            card,
+                            targetPos: payload.targetPos,
+                            targetText,
+                            player: opponentColor
+                        }]);
+                    }
+                }
+            }
         };
 
         socket.on('remote_action', handleRemoteAction);
         return () => socket.off('remote_action', handleRemoteAction);
-    }, [gameMode]);
+    }, [gameMode, myColor]); // 添加 myColor 到依赖数组
 
     // 3. Send Game End
     useEffect(() => {
@@ -513,8 +564,25 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
             )}
 
             {showSettings && (
-                <SettingsModal onClose={() => setShowSettings(false)} onSurrender={() => { onQuit(); setShowSettings(false); }} onQuit={onQuit} />
+                <SettingsModal
+                    onClose={() => setShowSettings(false)}
+                    onSurrender={() => {
+                        dispatch({
+                            type: ActionTypes.GAME_OVER,
+                            winner: myColor === 'red' ? 'black' : 'red',
+                            reason: 'surrender'
+                        });
+                        setShowSettings(false);
+                    }}
+                    onQuit={onQuit}
+                />
             )}
+
+            <ActionNotification
+                notifications={notifications}
+                onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
+                onHighlight={(pos) => setExtraHighlight(pos)}
+            />
 
             {/* Main Layout */}
             <div className="main-layout">
@@ -537,6 +605,7 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                         lastOpponentMove={gameState.lastOpponentMove}
                         traps={gameState.traps}
                         activeBuffs={gameState.activeBuffs}
+                        extraHighlight={extraHighlight}
                         selectableTargets={selectableTargets.pieces}
                         selectableEmptyPositions={selectableTargets.positions}
                         summonedPieces={gameState.summonedPieces}

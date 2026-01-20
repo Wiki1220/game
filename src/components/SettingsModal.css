@@ -4,40 +4,63 @@
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.75);
     z-index: 2000;
     display: flex;
     justify-content: center;
     align-items: center;
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.3s ease;
 }
 
 .settings-modal {
-    background: var(--bg-secondary);
+    background: linear-gradient(135deg, #1e272e, #111);
     padding: 30px;
-    border-radius: 12px;
-    border: 1px solid var(--accent-primary);
-    width: 300px;
+    border-radius: 16px;
+    border: 2px solid #ffd700;
+    width: 320px;
     display: flex;
     flex-direction: column;
     gap: 15px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    transition: width 0.3s ease;
+}
+
+/* Wider modal for Rules */
+.settings-modal.wide {
+    width: 650px;
 }
 
 .settings-modal h3 {
-    margin: 0 0 10px 0;
+    margin: 0 0 15px 0;
     text-align: center;
-    color: var(--text-primary);
+    color: #ffd700;
+    font-size: 1.5em;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+    padding-bottom: 10px;
 }
 
 .settings-btn {
     width: 100%;
-    padding: 12px;
+    padding: 14px;
     border: none;
     border-radius: 8px;
-    font-size: 1em;
+    font-size: 1.1em;
     font-weight: bold;
     cursor: pointer;
-    transition: transform 0.1s;
+    transition: all 0.2s;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.settings-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
 }
 
 .settings-btn:active {
@@ -45,18 +68,67 @@
 }
 
 .settings-btn.surrender {
-    background-color: var(--bg-tertiary);
-    color: var(--accent-red);
-    border: 1px solid var(--accent-red);
+    background: linear-gradient(135deg, #c0392b, #a93226);
+    border: 1px solid #e74c3c;
 }
 
 .settings-btn.quit {
-    background-color: #333;
-    color: #aaa;
+    background: linear-gradient(135deg, #34495e, #2c3e50);
+    border: 1px solid #5d6d7e;
+}
+
+.settings-btn.rules {
+    background: linear-gradient(135deg, #2980b9, #2471a3);
+    border: 1px solid #5dade2;
 }
 
 .settings-btn.close {
     margin-top: 10px;
-    background-color: var(--accent-primary);
-    color: #000;
+    background: #222;
+    border: 1px solid #444;
+    color: #aaa;
+}
+
+.settings-btn.close:hover {
+    background: #333;
+    color: #fff;
+}
+
+.rules-content {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    max-height: 60vh;
+    overflow-y: auto;
+    color: #ecf0f1;
+    font-size: 0.95em;
+    line-height: 1.6;
+    text-align: left;
+}
+
+.rules-content h4 {
+    color: #ffd700;
+    margin: 15px 0 10px;
+    border-bottom: 1px solid rgba(255, 215, 0, 0.3);
+    padding-bottom: 5px;
+}
+
+.rules-content ul {
+    padding-left: 20px;
+    margin: 0;
+}
+
+.rules-content li {
+    margin-bottom: 8px;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
