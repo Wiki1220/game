@@ -2,12 +2,13 @@ import React, { useReducer, useEffect, useState, useRef } from 'react';
 import Board from './Board';
 import DraftModal from './DraftModal';
 import SettingsModal from './SettingsModal';
-import { createInitialState, gameReducer, ActionTypes } from '../game/engine';
+import { createInitialState, gameReducer, ActionTypes, getValidMoves } from '../game/engine';
 import { getPieceMoves } from '../game/pieces';
 import Card from './Card';
 import { PLAYERS, PHASES } from '../game/constants';
 import { socket } from '../game/socket';
 import { useToast } from './common/Toast';
+import './GameArena.css';
 
 // Localization Helpers
 const PIECE_NAMES = {
@@ -176,12 +177,17 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
         handleGameAction({ type: ActionTypes.PLAY_CARD, payload: { card } });
     };
 
-    const handleSquareClick = (x, y) => {
-        try {
-            if (gameState.phase === 'GAMEOVER') return;
-            if (gameMode === 'ONLINE_GAME' && gameState.turn !== myColor) return;
+    // Ref for latest state to avoid re-creating handlers on every timer tick
+    const gameStateRef = useRef(gameState);
+    useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
-            const { board, turn, validMoves, pendingCard } = gameState;
+    const handleSquareClick = React.useCallback((x, y) => {
+        const currentGameState = gameStateRef.current;
+        try {
+            if (currentGameState.phase === 'GAMEOVER') return;
+            if (gameMode === 'ONLINE_GAME' && currentGameState.turn !== myColor) return;
+
+            const { board, turn, validMoves, pendingCard } = currentGameState;
 
             // 1. Pending Card Targeting
             if (pendingCard) {
@@ -206,7 +212,7 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
             if (isMoveTarget) {
                 handleGameAction({
                     type: ActionTypes.MOVE_PIECE,
-                    payload: { pieceId: gameState.selectedPieceId, toX: x, toY: y }
+                    payload: { pieceId: currentGameState.selectedPieceId, toX: x, toY: y }
                 });
                 return;
             }
@@ -214,13 +220,13 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
             // 3. Select Piece (Friendly)
             const clickedPiece = board.find(p => p.x === x && p.y === y);
             if (clickedPiece && clickedPiece.player === turn) {
-                dispatch({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: clickedPiece.id } });
+                handleGameAction({ type: ActionTypes.SELECT_PIECE, payload: { pieceId: clickedPiece.id } });
             }
         } catch (e) {
             console.error("Board Interaction Error:", e);
             addToast(`游戏逻辑错误: ${e.message}`, 'error');
         }
-    };
+    }, [gameMode, myColor]); // Stable dependencies
 
     // Helper: Get selectable targets for pending card
     const getSelectableTargets = () => {
@@ -257,6 +263,32 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
     const selectableTargets = getSelectableTargets();
 
     const activePlayerHand = gameState.players[gameState.turn].hand;
+
+    // UX-001: 将军检测 - 检查当前玩家是否被将军
+    const isInCheck = React.useMemo(() => {
+        const currentPlayer = gameState.turn;
+        // 如果游戏结束，不再检测将军
+        if (gameState.phase === 'GAMEOVER') return false;
+
+        const general = gameState.board.find(p => p.player === currentPlayer && p.type === 'general');
+        if (!general) return false;
+
+        // 严格将军检测：检查任何敌方棋子的合法移动是否包含将的位置
+        return gameState.board.some(p => {
+            // 排除己方和中立
+            if (p.player === currentPlayer || p.player === 'neutral') return false;
+
+            // 获取敌方棋子的合法移动（忽略当前是否轮到它）
+            // 传入 true 作为第三个参数 ignoreTurn
+            const moves = getValidMoves(gameState, p, true);
+
+            return moves.some(m => m.x === general.x && m.y === general.y);
+        });
+    }, [gameState.board, gameState.turn, gameState]);
+
+    // UX-002: 倒计时紧迫感
+    const currentTimer = gameState.timers[gameState.turn] || 60;
+    const isTimerCritical = currentTimer <= 10;
 
     // --- RENDER ---
     return (
@@ -346,34 +378,32 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                         <button className="icon-btn settings-trigger" onClick={() => setShowSettings(true)}>⚙️</button>
                     </div>
 
-                    {/* Global Rules Display - Only RULE type cards */}
-                    {gameState.globalRules && gameState.globalRules.length > 0 && (() => {
-                        const ruleCards = gameState.globalRules.filter(r => r.type === '永续'); // CARD_TYPES.RULE = '永续'
-                        if (ruleCards.length === 0) return null;
-
-                        return (
-                            <div className="sidebar-section active-rules-section">
-                                <div className="section-header">
-                                    <span>⚠️ 生效规则</span>
-                                </div>
-                                <div className="rules-list">
-                                    {ruleCards.map((rule, idx) => (
-                                        <div key={idx} className="rule-item">
-                                            <div className="rule-name">{rule.name}</div>
-                                            <div className="rule-effect-text">{rule.effect}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        );
-                    })()}
-
-                    {/* Status Panel (Replaces Log) */}
-                    <div className="sidebar-section status-panel">
-                        <div className="section-header">
-                            <span>⏳ 状态 (剩余 {Math.ceil(gameState.timers[gameState.turn] || 60)}s)</span>
+                    {/* Status Panel (Replaces Log & Rules) */}
+                    <div className={`sidebar-section status-panel ${isInCheck ? 'in-check' : ''} ${isTimerCritical ? 'timer-critical' : ''}`}>
+                        <div className="section-header" style={{ justifyContent: 'center' }}>
+                            <span className={isTimerCritical ? 'timer-warning timer-blink' : ''}>
+                                剩余 {Math.ceil(currentTimer)}s
+                                {isInCheck && <span className="check-badge"> ⚠️ 将军!</span>}
+                            </span>
                         </div>
-                        <div className="status-content" style={{ padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px', minHeight: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                        <div className="status-content">
+                            {/* Embedded Rules Display */}
+                            {gameState.globalRules && gameState.globalRules.some(r => r.type === '永续') && (() => {
+                                const ruleCards = gameState.globalRules.filter(r => r.type === '永续');
+                                return (
+                                    <>
+                                        <div className="mini-rules-list">
+                                            {ruleCards.map((rule, idx) => (
+                                                <div key={idx} className="mini-rule-item">
+                                                    <span className="rule-name">[{rule.name}]</span> {rule.effect}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="status-separator" />
+                                    </>
+                                );
+                            })()}
+
                             {notification ? (
                                 <span style={{ color: '#ff4444', fontWeight: 'bold', fontSize: '1.2em' }}>
                                     ⚠️ {notification.message}
@@ -455,194 +485,7 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                 </aside>
             </div>
 
-            <style>{`
-        .notification-toast {
-            position: absolute;
-            top: 20%; left: 0;
-            background: rgba(0,0,0,0.8);
-            border: 2px solid #ffd700;
-            border-left: none;
-            padding: 20px 40px 20px 20px;
-            color: #fff;
-            border-radius: 0 10px 10px 0;
-            animation: slideInLeft 0.5s;
-            z-index: 200;
-        }
-        .card-preview-text { font-size: 1.2em; color: #ffd700; margin-top: 5px; }
-        
-        .opponent-card-preview-overlay {
-            position: fixed;
-            top: 20px;
-            right: 420px; /* Next to board, covering hand area */
-            z-index: 250;
-            animation: fadeIn 0.3s ease-in;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .opponent-card-box {
-            background: linear-gradient(135deg, #1a1a2e, #16213e);
-            border: 3px solid #ffd700;
-            border-radius: 15px;
-            padding: 20px;
-            min-width: 250px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-        }
-        
-        .opponent-card-title {
-            font-size: 0.9em;
-            color: #95a5a6;
-            text-align: center;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .opponent-card-name {
-            font-size: 1.8em;
-            font-weight: bold;
-            color: #ffd700;
-            text-align: center;
-            margin-bottom: 15px;
-            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
-        }
-        
-        .opponent-card-effect {
-            font-size: 0.9em;
-            color: #ecf0f1;
-            text-align: center;
-            line-height: 1.4;
-            padding: 10px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 8px;
-        }
 
-        .hand-stack-container {
-            position: relative;
-            height: 400px; /* Enough for expanded stack */
-            margin-top: 20px;
-        }
-        .hand-card-wrapper {
-            position: absolute;
-            left: 10px; right: 10px;
-            transition: top 0.3s ease;
-        }
-        
-        .waiting-overlay {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.7); padding: 10px 20px; borderRadius: 20px; color: #fff;
-        }
-
-        .global-rule-display {
-            background: #2c3e50;
-            padding: 10px;
-            margin: 10px;
-            border-left: 3px solid #e74c3c;
-            color: #fff;
-        }
-
-        .active-rules-section {
-            margin: 10px;
-            background: rgba(231, 76, 60, 0.1);
-            border: 1px solid #e74c3c;
-            border-radius: 5px;
-            padding: 10px;
-            max-height: 150px;
-            overflow-y: auto;
-        }
-
-        .rules-list {
-            margin-top: 8px;
-        }
-
-        .rule-item {
-            display: flex;
-            flex-direction: column;
-            padding: 8px;
-            margin: 5px 0;
-            background: rgba(0,0,0,0.3);
-            border-radius: 3px;
-            font-size: 0.85em;
-        }
-
-        .rule-name {
-            font-weight: bold;
-            color: #e74c3c;
-            margin-bottom: 4px;
-        }
-        
-        .rule-effect-text {
-            font-size: 0.9em;
-            color: #bdc3c7;
-            line-height: 1.3;
-        }
-
-        .rule-icon {
-            margin-right: 8px;
-            font-size: 1.2em;
-        }
-
-        .action-log-section {
-            margin: 10px;
-            background: rgba(0,0,0,0.2);
-            border: 1px solid #34495e;
-            border-radius: 5px;
-            padding: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .log-list {
-            margin-top: 8px;
-        }
-
-        .log-entry {
-            padding: 4px 6px;
-            margin: 2px 0;
-            background: rgba(255,255,255,0.05);
-            border-left: 2px solid #3498db;
-            border-radius: 2px;
-            font-size: 0.8em;
-            color: #ecf0f1;
-        }
-
-        .empty-log {
-            text-align: center;
-            padding: 20px;
-            color: #7f8c8d;
-            font-size: 0.85em;
-        }
-
-        .section-header {
-            font-weight: bold;
-            color: #ecf0f1;
-            font-size: 0.9em;
-            padding-bottom: 5px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-
-        .victory-modal {
-            background: #222;
-            color: white;
-            padding: 60px;
-            width: 500px;
-            text-align: center;
-            border: 2px solid gold;
-            border-radius: 12px;
-            box-shadow: 0 0 30px rgba(0,0,0,0.8);
-            position: relative;
-            z-index: 1000;
-        }
-        .victory-modal h1 { font-size: 3em; margin-bottom: 30px; }
-
-        @keyframes slideInLeft {
-            from { transform: translateX(-100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-      `}</style>
         </div>
     );
 }

@@ -98,8 +98,9 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
         );
     };
 
-    const renderCells = () => {
-        const cells = [];
+    // ISSUE-012 FIX: 使用 useMemo 缓存 cells 渲染，避免每次都重新计算90个格子
+    const cells = useMemo(() => {
+        const cellsArray = [];
         for (let y = 0; y < 10; y++) {
             for (let x = 0; x < 9; x++) {
                 const piece = boardState.find(p => p.x === x && p.y === y);
@@ -117,7 +118,7 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                 // Selectable for card target
                 const isSelectableEmpty = selectableEmptyPositions.some(pos => pos.x === x && pos.y === y);
 
-                cells.push(
+                cellsArray.push(
                     <div
                         key={`${x}-${y}`}
                         className={`board-square ${isValidMove ? 'valid-target' : ''}`}
@@ -161,14 +162,14 @@ const Board = ({ boardState, selectedPieceId, validMoves, onSquareClick, lastMov
                 );
             }
         }
-        return cells;
-    };
+        return cellsArray;
+    }, [boardState, selectedPieceId, validMoves, lastMove, lastOpponentMove, selectableTargets, selectableEmptyPositions, summonedPieces, flip, hoveredPieceId, traps, activeBuffs]);
 
     return (
         <div className="board-container">
             <div className="xiangqi-board" style={{ transform: flip ? 'rotate(180deg)' : 'none' }}>
                 {renderGrid()}
-                {renderCells()}
+                {cells}
             </div>
             <style>{`
                 .last-move-marker {

@@ -48,9 +48,17 @@ app.use(express.static(distPath));
 const server = http.createServer(app);
 
 // Allow both localhost and the production IP/domain
+// BUG-010 FIX: 限制 CORS 来源，生产环境只允许特定域名
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://120.26.212.80',
+    'https://120.26.212.80'
+];
+
 const io = new Server(server, {
     cors: {
-        origin: "*",
+        origin: process.env.NODE_ENV === 'production' ? allowedOrigins : "*",
         methods: ["GET", "POST"]
     }
 });

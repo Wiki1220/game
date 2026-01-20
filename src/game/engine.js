@@ -1,4 +1,4 @@
-import { PLAYERS, BOARD_WIDTH, BOARD_HEIGHT } from './constants.js';
+import { PLAYERS, BOARD_WIDTH, BOARD_HEIGHT, GAME_CONFIG } from './constants.js';
 import { getRandomCards, createRNG } from './cards.js';
 import { CARD_TYPES, CARD_TIERS } from './cardDefs.js';
 
@@ -48,7 +48,7 @@ export const createInitialState = ({ seed } = {}) => ({
         [PLAYERS.RED]: { hand: [], dead: [] },
         [PLAYERS.BLACK]: { hand: [], dead: [] }
     },
-    timers: { [PLAYERS.RED]: 60, [PLAYERS.BLACK]: 60 },
+    timers: { [PLAYERS.RED]: GAME_CONFIG.TURN_TIME_LIMIT, [PLAYERS.BLACK]: GAME_CONFIG.TURN_TIME_LIMIT },
     halfMoveClock: 0,
     log: [],
     // Draft
@@ -83,8 +83,8 @@ const getPieceName = (piece) => {
 // --- Move Logic ---
 const isValidPos = (x, y) => x >= 0 && x < 9 && y >= 0 && y < 10;
 
-const getValidMoves = (state, piece) => {
-    if (!piece || piece.player !== state.turn) return [];
+export const getValidMoves = (state, piece, ignoreTurn = false) => {
+    if (!piece || (!ignoreTurn && piece.player !== state.turn)) return [];
 
     // 1. Status Check
     const isFrozen = state.activeBuffs.some(b => b.pieceId === piece.id && b.effectId === 'FROZEN');
@@ -571,7 +571,6 @@ const resolveCardEffect = (state, card, targetId = null, targetPos = null) => {
         case 'RULE_TIDE':
             // Add complete card info to globalRules for proper display
             // Single Rule Logic (Environment Cards Mutually Exclusive)
-            newState.globalRules = newState.globalRules.filter(r => r.type !== '永续');
             // Single Rule Logic (Environment Cards Mutually Exclusive)
             newState.globalRules = newState.globalRules.filter(r => r.type !== '永续');
             newState.globalRules.push({
@@ -639,13 +638,13 @@ const switchTurnLogic = (state) => {
     newState.turn = nextTurn;
 
     // Reset Timer for new turn
-    newState.timers[nextTurn] = 60;
+    newState.timers[nextTurn] = GAME_CONFIG.TURN_TIME_LIMIT;
 
     // --- Draft Logic ---
     const hand = newState.players[nextTurn].hand;
-    // Hand Limit 3 (Skip Draft)
-    if (hand.length >= 3) {
-        newState.log.push({ turn: nextTurn, text: '手牌上限(3)，跳过抽卡' });
+    // Hand Limit (Skip Draft)
+    if (hand.length >= GAME_CONFIG.MAX_HAND_SIZE) {
+        newState.log.push({ turn: nextTurn, text: `手牌上限(${GAME_CONFIG.MAX_HAND_SIZE})，跳过抽卡` });
         newState.phase = 'PLAY_CARD';
     } else {
         newState.phase = 'DRAFT';
@@ -706,7 +705,14 @@ const switchTurnLogic = (state) => {
             const riverY = 4;
             const floodedPieces = newState.board.filter(p => p.y === riverY || p.y === riverY + 1);
             floodedPieces.forEach(p => {
-                newState.players[p.player].dead.push(p);
+                // BUG-003 FIX: 中立棋子没有 players entry，需要特殊处理
+                if (p.player !== 'neutral' && newState.players[p.player]) {
+                    newState.players[p.player].dead.push(p);
+                }
+                // 同时从 summonedPieces 中移除
+                if (newState.summonedPieces.includes(p.id)) {
+                    newState.summonedPieces = newState.summonedPieces.filter(id => id !== p.id);
+                }
             });
             newState.board = newState.board.filter(p => p.y !== riverY && p.y !== riverY + 1);
             newState.log.push({ text: '\u6d2a\u6c34\u6d88\u706d\u695a\u6cb3\u6c49\u754c\u4e0a\u7684\u68cb\u5b50!' });
@@ -797,12 +803,18 @@ export const gameReducer = (state, action) => {
                 newState.board = newState.board.filter(p => p.id !== target.id);
                 if (target.player !== 'neutral') newState.players[target.player].dead.push(target);
 
+                // BUG-002 FIX: 召唤物被吃时从追踪列表移除
+                if (newState.summonedPieces.includes(target.id)) {
+                    newState.summonedPieces = newState.summonedPieces.filter(id => id !== target.id);
+                }
+
                 // Triggers
                 if (target.type === 'jackpot') {
                     const currentHandSize = newState.players[state.turn].hand.length;
                     // Hand limit check: only add cards if hand has space
                     if (currentHandSize < 3) {
-                        const cardsToGet = Math.min(currentHandSize, 3 - currentHandSize); // Get as many as possible
+                        // BUG-004 FIX: 修正卡牌数量计算，应获取剩余空位数量的卡牌
+                        const cardsToGet = 3 - currentHandSize; // Get as many as possible
                         const { cards } = getRandomCards(cardsToGet, CARD_TIERS.PRISMATIC, newState.rng);
                         newState.players[state.turn].hand.push(...cards);
                     }
@@ -849,6 +861,9 @@ export const gameReducer = (state, action) => {
             }
 
             piece.x = toX; piece.y = toY;
+
+            // BUG-007 FIX: 记录当前移动的棋子类型，用于「可疑交易」卡牌
+            newState.lastMovedPieceType = piece.type;
 
             // Equipment Triggers AFTER move
 
@@ -973,7 +988,8 @@ export const gameReducer = (state, action) => {
 
             if (newState.timers[state.turn] <= 0) {
                 newState.log.push({ text: `${state.turn === PLAYERS.RED ? '红方' : '黑方'} 回合超时，自动跳过` });
-                return switchTurnLogic(state);
+                // BUG-001 FIX: 使用 newState 而非 state，确保日志正确记录
+                return switchTurnLogic(newState);
             }
             return newState;
         }

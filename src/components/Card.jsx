@@ -56,9 +56,9 @@ const Card = ({ card, onClick, disabled, style }) => {
 
       <style>{`
         .game-card {
-          width: 150px;
-          height: 200px;
-          border: 2px solid;
+          width: 210px;
+          height: 280px;
+          border: 3px solid;
           border-radius: 10px;
           padding: 12px;
           color: white;
@@ -121,7 +121,7 @@ const Card = ({ card, onClick, disabled, style }) => {
         
         .card-name {
           font-weight: bold;
-          font-size: 0.9em;
+          font-size: 1.1em;
           text-shadow: 0 2px 4px rgba(0,0,0,0.8);
           display: block;
         }
@@ -136,7 +136,7 @@ const Card = ({ card, onClick, disabled, style }) => {
         }
 
         .card-type-icon {
-          font-size: 4em;
+          font-size: 5em;
           filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
           color: #fff;
         }
@@ -151,10 +151,10 @@ const Card = ({ card, onClick, disabled, style }) => {
 
         .card-effect {
           margin: 0;
-          font-size: 0.7em;
-          line-height: 1.4;
+          font-size: 0.85em;
+          line-height: 1.5;
           text-align: center;
-          max-height: 50px;
+          max-height: 80px;
           overflow-y: auto;
           text-shadow: 0 1px 2px rgba(0,0,0,0.8);
         }

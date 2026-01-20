@@ -8,15 +8,28 @@ const Lobby = ({ user, onLogout, onJoinGame, onLocalGame }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
-    // Fetch rooms on mount
-    socket.emit('get_rooms');
-
+    // BUG-006 FIX: 确保 socket 连接后再请求房间列表
     const handleRoomList = (list) => {
       setRooms(list);
     };
 
+    const requestRooms = () => {
+      socket.emit('get_rooms');
+    };
+
+    // 如果已连接，直接请求；否则等待连接后再请求
+    if (socket.connected) {
+      requestRooms();
+    } else {
+      socket.once('connect', requestRooms);
+    }
+
     socket.on('room_list', handleRoomList);
-    return () => socket.off('room_list', handleRoomList);
+
+    return () => {
+      socket.off('room_list', handleRoomList);
+      socket.off('connect', requestRooms);
+    };
   }, []);
 
   const handleCreateSubmit = (config) => {

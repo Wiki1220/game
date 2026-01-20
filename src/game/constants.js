@@ -61,3 +61,11 @@ export const PHASES = {
     TARGET_SELECTION: 'TARGET_SELECTION', // Added for clarity
     MOVE: 'MOVE',
 };
+
+// ISSUE-013: 游戏配置常量 (原 Magic Numbers)
+export const GAME_CONFIG = {
+    MAX_HAND_SIZE: 3,           // 手牌上限
+    TURN_TIME_LIMIT: 60,        // 回合时间限制（秒）
+    MAX_SUMMON_COUNT: 2,        // 召唤物上限
+    TIMER_CRITICAL_THRESHOLD: 10, // 倒计时紧迫提示阈值（秒）
+};
