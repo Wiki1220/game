@@ -17,6 +17,11 @@ const GameRecord = sequelize.define('GameRecord', {
         allowNull: false,
         comment: '房间ID'
     },
+    game_log_id: {
+        type: DataTypes.STRING(36),
+        allowNull: true,
+        comment: '详细日志文件ID'
+    },
 
     // ==================== 玩家信息 ====================
     // 红方

@@ -122,6 +122,9 @@ async function deploy() {
                 return entry.name.includes('node_modules') ? false : entry;
             });
 
+            // 添加 Shared Code (cardDefs.js) 用于后端 syncCards 脚本
+            archive.file(path.join(projectRoot, 'src/game/cardDefs.js'), { name: 'src/game/cardDefs.js' });
+
             archive.finalize();
         });
 

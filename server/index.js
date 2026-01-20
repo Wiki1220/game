@@ -11,9 +11,10 @@ app.use(express.json()); // Support JSON body
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/user', require('./routes/userRoutes'));
+app.use('/api/logs', require('./routes/logRoutes'));
 
 // Database - 使用统一的模型索引
-const { sequelize, User, Guest, GameRecord } = require('./models');
+const { sequelize, User, Guest, GameRecord, Card, PointsTransaction, UserActionLog, ErrorLog } = require('./models');
 
 // Sync Database
 (async () => {
@@ -22,7 +23,7 @@ const { sequelize, User, Guest, GameRecord } = require('./models');
         console.log('✅ Database connected.');
         // alter: true 会自动添加新字段（生产环境谨慎使用）
         await sequelize.sync({ alter: true });
-        console.log('✅ Models synced (User, Guest, GameRecord).');
+        console.log('✅ Models synced (User, Guest, GameRecord, Card, PointsTransaction, UserActionLog, ErrorLog).');
     } catch (error) {
         console.error('❌ Database connection error:', error);
     }

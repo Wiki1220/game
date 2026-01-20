@@ -50,6 +50,16 @@
 
 ---
 
+
+### ✨ 数据与日志 (Data & Logging)
+- **数据库架构**: MySQL，包含 `GameRecord` (对局)、`UserActionLog` (行为)、`PointsTransaction` (点数)、`ErrorLog` (错误) 等模型。
+- **日志系统**:
+  - **对局日志**: 每局游戏生成详细的 JSON 日志文件，存储在服务器 `/var/www/game/logs/games/` 目录下。包含完整的初始状态、时间线和每一步操作。
+  - **错误监控**: 服务器报错自动记录到数据库 `server/logs/errors/` 和数据库表。
+  - **查询工具**: 代码中包含 `scripts/check-logs.js` 等工具便于运维查询。
+
+---
+
 ## 4. 项目结构与文件说明
 
 | 目录/文件 | 说明 |
@@ -61,10 +71,13 @@
 | `src/components/` | UI 组件 (GameArena, Board, Card, Lobby, Toast 等)。 |
 | **`server/`** | **后端源码 (Node.js + Express + Socket.IO)** |
 | `server/index.js` | 入口文件，HTTP 服务启动。 |
-| `server/socket.js` | Socket.IO 事件处理 (房间管理、游戏同步)。 |
+| `server/socket.js` | Socket.IO 事件处理 (房间管理、游戏同步、日志记录)。 |
+| `server/models/` | **数据库模型** (User, GameRecord, Card, PointsTransaction, etc.)。 |
+| `server/services/` | **服务层** (LoggerService - 日志服务)。 |
 | `server/managers/` | 业务逻辑层 (RoomManager)。 |
 | **`scripts/`** | **自动化脚本** |
 | `scripts/auto-deploy.js` | 一键部署脚本 (打包 -> 上传 -> 重启)。 |
+| `scripts/check-logs.js` | 远程日志查询工具。 |
 | `config/` | 数据库配置文件。 |
 
 ---
@@ -97,16 +110,6 @@
 - [x] **房间列表同步**: 修复了服务器在创建房间时未正确跟踪 ID，导致断线后产生幽灵房间的问题。
 - [x] **手牌逻辑**: 实现了手牌上限(3张)检测与满手牌跳过抽卡逻辑。
 
-### ⏳ 待完成 / 建议 (Future Work)
-1.  **功能扩展**:
-    - [ ] **棋谱回放**: 记录对局日志供后续查看。
-    - [ ] **后端验证**: 迁移核心游戏规则校验至服务端（目前仅前端校验）。
-2.  **技术债务**:
-    - [ ] **TypeScript**: 逐步引入类型系统。
-3.  **UI 完善**:
-    - [ ] **规则文案**: 更新设置界面中的规则说明，包含上述新规则。
-
----
 
 ## 6. 部署说明
 代码已包含自动化部署脚本。在项目根目录下运行以下命令即可将最新更改发布到测试服务器：

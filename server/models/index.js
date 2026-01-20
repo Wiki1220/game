@@ -1,6 +1,10 @@
 const User = require('./User');
 const Guest = require('./Guest');
 const GameRecord = require('./GameRecord');
+const Card = require('./Card');
+const PointsTransaction = require('./PointsTransaction');
+const UserActionLog = require('./UserActionLog');
+const ErrorLog = require('./ErrorLog');
 const sequelize = require('../config/db');
 
 // ==================== 模型关联 ====================
@@ -48,9 +52,27 @@ Guest.belongsTo(User, {
     constraints: false
 });
 
+// User 与 PointsTransaction 关系
+User.hasMany(PointsTransaction, {
+    foreignKey: 'user_id',
+    as: 'pointsTransactions',
+    constraints: false
+});
+
+// User 与 UserActionLog 关系
+User.hasMany(UserActionLog, {
+    foreignKey: 'user_id',
+    as: 'actionLogs',
+    constraints: false
+});
+
 module.exports = {
     sequelize,
     User,
     Guest,
-    GameRecord
+    GameRecord,
+    Card,
+    PointsTransaction,
+    UserActionLog,
+    ErrorLog
 };

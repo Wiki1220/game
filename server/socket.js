@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('./middleware/auth');
 const RoomManager = require('./managers/RoomManager');
+const { GameRecord, User, Guest } = require('./models');
+const LoggerService = require('./services/LoggerService');
 
 // Global Queue defined at top level to ensure availability
 const matchingQueue = [];
@@ -140,6 +142,137 @@ module.exports = (io) => {
         socket.on('game_action', ({ roomId, action }) => {
             // Relay to others in room
             socket.to(roomId).emit('remote_action', action);
+        });
+
+        // 5.1 Game Start - 记录游戏开始
+        socket.on('game_start', async ({ roomId }) => {
+            try {
+                const room = RoomManager.rooms.get(roomId);
+                if (!room) return;
+
+                const players = Array.from(room.players.values());
+                const redPlayer = players.find(p => p.color === 'red');
+                const blackPlayer = players.find(p => p.color === 'black');
+
+                // 记录游戏开始时间
+                room.gameStartedAt = new Date();
+                room.gameLogId = LoggerService.generateGameLogId();
+
+                console.log(`[GAME] Game started in room ${roomId}. Log ID: ${room.gameLogId}`);
+
+                // 记录用户行为日志
+                LoggerService.logUserAction({
+                    user_id: socket.user.id,
+                    user_type: socket.user.is_guest ? 'guest' : 'user',
+                    action: 'game_start',
+                    action_category: 'game',
+                    target_type: 'room',
+                    target_id: roomId,
+                    metadata: {
+                        game_log_id: room.gameLogId,
+                        red_player: redPlayer?.user?.username,
+                        black_player: blackPlayer?.user?.username
+                    }
+                });
+            } catch (error) {
+                console.error('[GAME] Error recording game start:', error);
+            }
+        });
+
+        // 5.2 Game End - 记录游戏结束
+        socket.on('game_end', async ({ roomId, result }) => {
+            try {
+                const room = RoomManager.rooms.get(roomId);
+                if (!room) {
+                    console.log(`[GAME] Room ${roomId} not found for game_end. Creating record from result only.`);
+                }
+
+                const gameEndedAt = new Date();
+                const gameStartedAt = room?.gameStartedAt || new Date(Date.now() - (result.duration_seconds || 0) * 1000);
+                const durationSeconds = Math.floor((gameEndedAt - gameStartedAt) / 1000);
+
+                // 从 result 中提取信息
+                const {
+                    winner,
+                    end_reason,
+                    total_turns = 0,
+                    red_player,
+                    black_player,
+                    game_log_data
+                } = result;
+
+                console.log(`[GAME] Game ended in room ${roomId}. Winner: ${winner}, Reason: ${end_reason}`);
+
+                // 创建 GameRecord
+                const record = await GameRecord.create({
+                    room_id: roomId,
+                    game_log_id: room?.gameLogId || LoggerService.generateGameLogId(),
+                    red_player_id: red_player?.id || null,
+                    red_player_type: red_player?.is_guest ? 'guest' : 'user',
+                    red_username: red_player?.username || 'Unknown',
+                    black_player_id: black_player?.id || null,
+                    black_player_type: black_player?.is_guest ? 'guest' : 'user',
+                    black_username: black_player?.username || 'Unknown',
+                    winner: winner || 'none',
+                    end_reason: end_reason || 'unknown',
+                    total_turns: total_turns,
+                    duration_seconds: durationSeconds,
+                    game_mode: room?.isPublic === false ? 'match' : 'casual',
+                    started_at: gameStartedAt,
+                    ended_at: gameEndedAt
+                });
+
+                console.log(`[GAME] GameRecord created. ID: ${record.id}`);
+
+                // 写入详细日志文件
+                if (game_log_data) {
+                    game_log_data.game_record_id = record.id;
+                    game_log_data.timeline.game_ended = gameEndedAt.toISOString();
+                    game_log_data.timeline.total_duration_ms = durationSeconds * 1000;
+                    game_log_data.result = {
+                        winner,
+                        end_reason,
+                        total_turns
+                    };
+
+                    LoggerService.writeGameLog(room?.gameLogId || record.game_log_id, game_log_data);
+                }
+
+                // 记录用户行为日志
+                LoggerService.logUserAction({
+                    user_id: socket.user.id,
+                    user_type: socket.user.is_guest ? 'guest' : 'user',
+                    action: 'game_end',
+                    action_category: 'game',
+                    target_type: 'room',
+                    target_id: roomId,
+                    metadata: {
+                        game_record_id: record.id,
+                        winner,
+                        end_reason
+                    }
+                });
+
+                // 返回记录ID给前端
+                socket.emit('game_record_saved', {
+                    success: true,
+                    record_id: record.id,
+                    game_log_id: record.game_log_id
+                });
+
+            } catch (error) {
+                console.error('[GAME] Error recording game end:', error);
+                LoggerService.logError({
+                    error_type: 'game_logic',
+                    severity: 'error',
+                    message: 'Failed to save game record',
+                    user_id: socket.user?.id,
+                    game_id: roomId,
+                    stack_trace: error.stack,
+                    metadata: { result }
+                });
+                socket.emit('game_record_saved', { success: false, error: error.message });
+            }
         });
 
         // 6. Leave / Disconnect

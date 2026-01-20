@@ -108,6 +108,16 @@ const User = sequelize.define('User', {
         defaultValue: 0,
         comment: '总游戏时长（秒）'
     },
+    total_points_earned: {
+        type: DataTypes.BIGINT,
+        defaultValue: 0,
+        comment: '累计获得点数'
+    },
+    total_points_spent: {
+        type: DataTypes.BIGINT,
+        defaultValue: 0,
+        comment: '累计消费点数'
+    },
 
     // ==================== 账户状态 ====================
     status: {

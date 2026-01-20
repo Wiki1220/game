@@ -65,6 +65,98 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
 
     // --- Effects ---
 
+    // Logging Refs
+    const actionHistory = useRef([]);
+    const gameLogSubmitted = useRef(false);
+    const gameStartedSent = useRef(false);
+
+    // 1. Send Game Start
+    useEffect(() => {
+        if (gameMode === 'ONLINE_GAME' && !gameStartedSent.current) {
+            gameStartedSent.current = true;
+            socket.emit('game_start', { roomId: activeRoomId.current });
+        }
+    }, [gameMode]);
+
+    // 2. Track Remote Actions
+    useEffect(() => {
+        if (gameMode !== 'ONLINE_GAME') return;
+
+        const handleRemoteAction = (action) => {
+            // Record remote action
+            actionHistory.current.push({
+                seq: actionHistory.current.length + 1,
+                timestamp: new Date().toISOString(),
+                source: 'remote',
+                action
+            });
+            dispatch(action);
+        };
+
+        socket.on('remote_action', handleRemoteAction);
+        return () => socket.off('remote_action', handleRemoteAction);
+    }, [gameMode]);
+
+    // 3. Send Game End
+    useEffect(() => {
+        if (gameState.phase === 'GAMEOVER' && !gameLogSubmitted.current && gameMode === 'ONLINE_GAME') {
+            gameLogSubmitted.current = true;
+
+            // Construct detailed log
+            const gameLogData = {
+                log_version: '1.0',
+                game_record_id: null, // Will be filled by server
+                server_version: '0.4.0',
+
+                // Metadata
+                room: {
+                    id: activeRoomId.current,
+                    mode: gameMode
+                },
+
+                // Initial State
+                initial_state: {
+                    seed: seed || roomId, // Assuming seed logic
+                    red_player: gameState.players.red.user?.username || 'Red',
+                    black_player: gameState.players.black.user?.username || 'Black'
+                },
+
+                // Timeline
+                timeline: {
+                    game_started: actionHistory.current[0]?.timestamp || new Date().toISOString(),
+                    // game_ended filled by server
+                    total_duration_ms: 0 // server calcs
+                },
+
+                // Result
+                result: {
+                    winner: gameState.winner,
+                    end_reason: gameState.reason || 'normal'
+                },
+
+                // Events (Full Action History)
+                events: actionHistory.current
+            };
+
+            // Player Info for quick record creation
+            const redPlayer = gameState.players.red.user; // Assuming user obj is here if online?
+            // Actually gameState.players stores minimal info usually. 
+            // Better to let Socket.IO user/session info handle player identification on server side if possible.
+            // But socket.js handlers rely on room.players which might be populated.
+            // Sending username helps double check.
+
+            socket.emit('game_end', {
+                roomId: activeRoomId.current,
+                result: {
+                    winner: gameState.winner,
+                    end_reason: gameState.reason || 'checkmate', // Default to checkmate for normal endings
+                    total_turns: gameState.turnCount || Math.floor(actionHistory.current.length / 2),
+                    game_log_data: gameLogData
+                }
+            });
+        }
+    }, [gameState.phase, gameMode, seed, roomId]); // gameState.winner/reason are in state
+
     // Socket: Player Status Listener (Online/Offline)
     useEffect(() => {
         if (gameMode !== 'ONLINE_GAME') return;
@@ -73,11 +165,26 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
             // Assume opponent left since 1v1 and I am here
             setOpponentOnline(false);
             addToast('对方已断线', 'warning');
+
+            // Log disconnection
+            actionHistory.current.push({
+                seq: actionHistory.current.length + 1,
+                event_type: 'player_disconnected',
+                timestamp: new Date().toISOString(),
+                data: { userId }
+            });
         };
 
         const handlePlayerJoined = () => {
             setOpponentOnline(true);
             addToast('对方已重连', 'success');
+            // Log reconnection
+            actionHistory.current.push({
+                seq: actionHistory.current.length + 1,
+                event_type: 'player_reconnected',
+                timestamp: new Date().toISOString(),
+                data: {}
+            });
         };
 
         socket.on('player_left', handlePlayerLeft);
@@ -104,16 +211,20 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
                     const timeLeft = currentGameState.timers[turn];
                     if (timeLeft <= 1 && !opponentOnlineRef.current) {
                         dispatch({ type: ActionTypes.GAME_OVER, winner: myColor, reason: '对方超时判负' });
-                        // Also notify server via action?
-                        // If we dispatch Local GAME_OVER, we see Victory.
-                        // Ideally we should emit a special 'claim_win' or just 'game_action' with GAME_OVER?
-                        // The engine reducer handles GAME_OVER action if we updated it to accept external 'reason'.
-                        // But current engine 'switchTurnLogic' just passes turn.
-                        // We are forcing a Win.
-                        // Emitting this action to server ensures opponent (if they reconnect) sees they lost.
+
+                        const action = { type: ActionTypes.GAME_OVER, winner: myColor, reason: '对方超时判负' };
+
+                        // Log this forced action
+                        actionHistory.current.push({
+                            seq: actionHistory.current.length + 1,
+                            timestamp: new Date().toISOString(),
+                            source: 'system_timeout',
+                            action
+                        });
+
                         socket.emit('game_action', {
                             roomId: activeRoomId.current,
-                            action: { type: ActionTypes.GAME_OVER, winner: myColor, reason: '对方超时判负' }
+                            action
                         });
                         return;
                     }
@@ -125,12 +236,12 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
         return () => clearInterval(timer);
     }, [gameState.phase, gameMode, myColor]); // Dependencies can correspond to restart conditions
 
-    // Socket
-    useEffect(() => {
-        if (gameMode !== 'ONLINE_GAME') return;
-        socket.on('remote_action', (action) => dispatch(action));
-        return () => socket.off('remote_action');
-    }, [gameMode]);
+    // Socket (Old handler removed, new one above)
+    // useEffect(() => {
+    //     if (gameMode !== 'ONLINE_GAME') return;
+    //     socket.on('remote_action', (action) => dispatch(action));
+    //     return () => socket.off('remote_action');
+    // }, [gameMode]);
 
     // Log Monitoring for Notifications & Game Over & Opponent Card Preview
     useEffect(() => {
@@ -143,13 +254,13 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
             }
 
             // Card Play Notification & Preview (Opponent)
-            if (lastEntry.text && lastEntry.text.includes('使用')) {
+            if (lastEntry.text && (lastEntry.text.includes('使用') || lastEntry.text.includes('plays'))) {
                 const isOpponent = (lastEntry.turn && lastEntry.turn !== myColor) ||
                     (gameMode === 'LOCAL' && lastEntry.turn !== gameState.turn);
 
                 if (isOpponent) {
                     // Extract card name from log text like "红方 使用 路障"
-                    const match = lastEntry.text.match(/使用\s+(.+)/);
+                    const match = lastEntry.text.match(/使用\s+(.+)/) || lastEntry.text.match(/plays\s+(.+)/);
                     if (match) {
                         const cardName = match[1];
                         // Check if it's a trap card (陷阱)
@@ -208,6 +319,16 @@ function GameArena({ gameMode, initialRoomId, myInitialColor, onQuit, seed }) {
 
     const handleGameAction = (action) => {
         try {
+            // Log action locally
+            if (gameMode === 'ONLINE_GAME') {
+                actionHistory.current.push({
+                    seq: actionHistory.current.length + 1,
+                    timestamp: new Date().toISOString(),
+                    source: 'local',
+                    action
+                });
+            }
+
             dispatch(action);
             if (gameMode === 'ONLINE_GAME') {
                 socket.emit('game_action', { roomId: activeRoomId.current, action });
