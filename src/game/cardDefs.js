@@ -8,6 +8,7 @@ export const CARD_TYPES = {
     SPEED: '速攻',
     TRAP: '陷阱',
     ACTION: '行动',
+    NORMAL: '通常',
     RULE: '永续', // 规则 -> 永续
     SUMMON: '召唤', // New
     EQUIP: '装备', // New
@@ -121,7 +122,7 @@ export const CARD_DATA = [
         id: 'action_universe',
         tier: CARD_TIERS.GOLD,
         name: '宇宙',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '若你没有相同的棋子，则消灭己方棋盘上所有的敌方棋子。',
         effectId: 'ACTION_UNIVERSE',
         isImplemented: true
@@ -130,7 +131,7 @@ export const CARD_DATA = [
         id: 'action_typhoon',
         tier: CARD_TIERS.PRISMATIC,
         name: '台风',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '摧毁所有已经发动的陷阱效果。',
         effectId: 'ACTION_TYPHOON',
         isImplemented: true
@@ -139,7 +140,7 @@ export const CARD_DATA = [
         id: 'action_future',
         tier: CARD_TIERS.GOLD,
         name: '增援未来',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '选择一个友方棋子，将其暂时移出游戏，在你的下下个行动阶段开始，使其回归原位，并吃掉当前位置的棋子。',
         effectId: 'ACTION_FUTURE',
         needsTarget: true,
@@ -150,7 +151,7 @@ export const CARD_DATA = [
         id: 'action_whisper',
         tier: CARD_TIERS.PRISMATIC,
         name: '古神低语',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '随机发动五张通常卡，目标会随机选定。',
         effectId: 'ACTION_WHISPER',
         isImplemented: false // Removed - too complex
@@ -159,7 +160,7 @@ export const CARD_DATA = [
         id: 'action_undead',
         tier: CARD_TIERS.SILVER,
         name: '亡灵大军',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '在你全部兵死亡的场合可以发动，复活你的所有兵。',
         effectId: 'ACTION_UNDEAD',
         isImplemented: true
@@ -190,7 +191,7 @@ export const CARD_DATA = [
         id: 'action_flood',
         tier: CARD_TIERS.SILVER,
         name: '洪水预警',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '六个回合后，消灭楚河汉界上的全部棋子。',
         effectId: 'ACTION_FLOOD',
         isImplemented: true
@@ -199,7 +200,7 @@ export const CARD_DATA = [
         id: 'action_time_distort',
         tier: CARD_TIERS.SILVER,
         name: '时空扰乱',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '下个回合对手的时间只有十五秒。',
         effectId: 'ACTION_TIME_DISTORT',
         isImplemented: true
@@ -208,7 +209,7 @@ export const CARD_DATA = [
         id: 'action_escort',
         tier: CARD_TIERS.GOLD,
         name: '护驾',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '应将时可以发动，选择一个空地，将一个随机友方棋子传送至该位置。',
         effectId: 'ACTION_ESCORT',
         needsTarget: true,
@@ -219,7 +220,7 @@ export const CARD_DATA = [
         id: 'action_sus_trade',
         tier: CARD_TIERS.SILVER,
         name: '可疑交易',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '若你的对手下一个行动阶段使用的棋子与你当前回合相同，则消灭两个棋子。',
         effectId: 'ACTION_SUS_TRADE',
         isImplemented: true
@@ -228,7 +229,7 @@ export const CARD_DATA = [
         id: 'action_immobilize',
         tier: CARD_TIERS.PRISMATIC,
         name: '定身术',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '选择一个敌方棋子，下一回合对手无法行动该棋子。',
         effectId: 'ACTION_IMMOBILIZE',
         needsTarget: true,
@@ -239,7 +240,7 @@ export const CARD_DATA = [
         id: 'action_mind_control',
         tier: CARD_TIERS.GOLD,
         name: '精神控制',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '选择一个敌方棋子，使其向随机有空位的方向移动一格。',
         effectId: 'ACTION_MIND_CONTROL',
         needsTarget: true,
@@ -250,7 +251,7 @@ export const CARD_DATA = [
         id: 'action_ignition',
         tier: CARD_TIERS.PRISMATIC,
         name: '点火',
-        type: CARD_TYPES.ACTION,
+        type: CARD_TYPES.NORMAL,
         effect: '选择一个友方车，若其在出生点且前方一个为空地，使其前进一格。',
         effectId: 'ACTION_IGNITION',
         needsTarget: true,

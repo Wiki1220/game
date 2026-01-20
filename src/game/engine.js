@@ -625,6 +625,12 @@ const resolveCardEffect = (state, card, targetId = null, targetPos = null) => {
     newState.pendingCard = null;
     newState.selectedPieceId = null;
     newState.log.push({ turn: state.turn, text: `${player === 'red' ? '红方' : '黑方'} 使用 ${card.name}` });
+
+    // Action Cards (Nano, Fireball) end the turn immediately
+    if (card.type === CARD_TYPES.ACTION) {
+        return switchTurnLogic(newState);
+    }
+
     return newState;
 };
 

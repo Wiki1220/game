@@ -22,6 +22,7 @@ const TYPE_ICONS = {
   [CARD_TYPES.SUMMON]: '◆',    // Diamond for summon
   [CARD_TYPES.EQUIP]: '⚙',     // Gear for equipment
   [CARD_TYPES.ACTION]: '★',    // Star for action
+  [CARD_TYPES.NORMAL]: '✦',    // Sparkle for normal
   [CARD_TYPES.RULE]: '∞',      // Infinity for permanent rules
   [CARD_TYPES.TRAP]: '▼',      // Down triangle for trap
 };

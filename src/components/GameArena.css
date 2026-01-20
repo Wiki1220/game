@@ -189,22 +189,98 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Game Over Modal Styling */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 5000;
+    backdrop-filter: blur(8px);
+    animation: fadeIn 0.5s ease;
+}
+
 .victory-modal {
-    background: #222;
+    background: linear-gradient(145deg, #1a1a1a, #000);
     color: white;
     padding: 60px;
-    width: 500px;
+    width: 600px;
     text-align: center;
-    border: 2px solid gold;
-    border-radius: 12px;
-    box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+    border: 3px solid transparent;
+    border-radius: 20px;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), inset 0 0 20px rgba(0, 0, 0, 0.5);
     position: relative;
     z-index: 1000;
+    animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    background-clip: padding-box;
+}
+
+/* Gold Border for Victory */
+.victory-modal::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    right: -3px;
+    bottom: -3px;
+    border-radius: 20px;
+    background: linear-gradient(45deg, #ffd700, #b8860b, #ffd700);
+    z-index: -1;
+    animation: rainbow-border 3s ease infinite;
+    /* Optional: simpler animation */
 }
 
 .victory-modal h1 {
-    font-size: 3em;
-    margin-bottom: 30px;
+    font-size: 4em;
+    margin-bottom: 40px;
+    font-weight: 800;
+    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.8);
+    background: linear-gradient(to bottom, #fff, #ccc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.primary-btn {
+    padding: 15px 40px;
+    font-size: 1.5em;
+    background: linear-gradient(to bottom, #ffd700, #ffa500);
+    border: none;
+    border-radius: 50px;
+    color: #4a3b00;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4), inset 0 2px 5px rgba(255, 255, 255, 0.4);
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.primary-btn:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 10px 25px rgba(255, 215, 0, 0.6), inset 0 2px 5px rgba(255, 255, 255, 0.6);
+    background: linear-gradient(to bottom, #ffe066, #ffb700);
+}
+
+.primary-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 5px rgba(255, 215, 0, 0.4);
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 @keyframes slideInLeft {

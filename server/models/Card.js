@@ -38,7 +38,7 @@ const Card = sequelize.define('Card', {
         comment: '英文效果描述'
     },
     type: {
-        type: DataTypes.ENUM('SPEED', 'TRAP', 'ACTION', 'RULE', 'SUMMON', 'EQUIP'),
+        type: DataTypes.ENUM('SPEED', 'TRAP', 'ACTION', 'RULE', 'SUMMON', 'EQUIP', 'NORMAL'),
         allowNull: false,
         comment: '卡牌类型'
     },
